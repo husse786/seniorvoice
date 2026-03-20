@@ -88,9 +88,6 @@ git push
 
 **Beispiel mit Bildunterschrift:**
 
-```markdown
-![UFW Status nach Konfiguration](screenshots/001_ufw_status.png)
-*UFW aktiv — Port 22 offen, alle anderen Ports geblockt*
-```
+![UFW, Docker Hello World, Ollama Version](screenshots/001_ufw_status.docker_hello_world.png)
 
 Auf Mac: Screenshot mit `Cmd + Shift + 4` erstellen → in `logs/screenshots/` ablegen → im Log referenzieren.
