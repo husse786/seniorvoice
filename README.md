@@ -177,14 +177,37 @@ seniorvoice/
 
 ---
 
-## Mit Claude arbeiten
+## Mit Claude arbeiten (Antigravity IDE)
 
-Dieses Projekt nutzt Claude als Coding-Assistenten direkt im IDE (Antigravity).
+### Erstmalige Einrichtung
 
-**Session starten:** Öffne `docs/prompt_master.md`, kopiere den Prompt und füge ihn in Claude ein. Claude liest automatisch den Projektkontext und schlägt den nächsten Schritt vor.
+Falls du noch nie mit Antigravity gearbeitet hast, schau dir das hier an: 
+[https://codelabs.developers.google.com/getting-started-google-antigravity#0]https://codelabs.developers.google.com/getting-started-google-antigravity#0 
 
-**Modell:** Sonnet 4.6 für Coding-Tasks, Opus 4.6 für Architekturentscheide.
+1. **Antigravity herunterladen** — [https://antigravity.google/](https://antigravity.google/)
+2. **Repo klonen** — öffne Antigravity, wähle "Clone Repository" (genau gleich wie in VsCode) und gib folgende URL ein:
+```
+   https://github.com/yanickfischer/seniorvoice
+```
+3. **Eigenen Branch erstellen** — benenne ihn nach deinem Namen:
+```bash
+   git checkout dev
+   git pull
+   git checkout -b dev-[deinname]
+   git push -u origin dev-[deinname]
+```
+   Beispiel: `dev-yanick`, `dev-chris`, `dev-sansone`, `dev-haris`
 
+4. **`.env` einrichten** — kopiere die Beispieldatei und passe sie an:
+```bash
+   cp .env.example .env
+```
+
+5. **Claude-Session starten** — öffne `docs/prompt_master.md`, kopiere den Prompt und füge ihn in das Claude-Chatfenster in Antigravity ein. Claude liest automatisch den Projektkontext und schlägt den nächsten Schritt vor.
+
+### Modellwahl
+- **Sonnet 4.6** — für alle Coding-Tasks
+- **Opus 4.6** — für Architekturentscheide oder komplexes Debugging
 ---
 
 *ZHAW FS 2026 · IoT Data Streaming & Analytics · Team SeniorVoice*
