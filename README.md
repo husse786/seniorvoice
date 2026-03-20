@@ -181,8 +181,8 @@ seniorvoice/
 
 ### Erstmalige Einrichtung
 
-Falls du noch nie mit Antigravity gearbeitet hast, schau dir das hier an: 
-[https://codelabs.developers.google.com/getting-started-google-antigravity#0]https://codelabs.developers.google.com/getting-started-google-antigravity#0 
+_Falls du noch nie mit Antigravity gearbeitet hast, schau dir das hier an:_
+[https://codelabs.developers.google.com/getting-started-google-antigravity#0]
 
 1. **Antigravity herunterladen** — [https://antigravity.google/](https://antigravity.google/)
 2. **Repo klonen** — öffne Antigravity, wähle "Clone Repository" (genau gleich wie in VsCode) und gib folgende URL ein:
