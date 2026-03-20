@@ -23,7 +23,7 @@
 |---|---|---|---|---|
 | A-01 | Raspberry Pi 5 headless aufsetzen, SSH, UFW, Docker, Ollama | ✅ | Yanick | 19.–20.03.2026 |
 | A-02 | docker-compose.yml Skeleton (alle 5 Services) | 🔄 | Yanick | — |
-| A-03 | Branching-Strategie definieren + dokumentieren | ⬜ | — | — |
+| A-03 | Branching-Strategie umsetzen (dev branch) + dokumentieren | ✅ | Yanick | 20.03.2026 |
 | A-04 | llama3.2:3b auf Pi pullen + Antwortzeit messen | ⬜ | — | — |
 | A-05 | SSH-Keys für Sansone, Haris, Chris einrichten | ❌ | — | Blockiert: Keys ausstehend |
 | A-06 | Externer SSH-Zugang via Uni IoT-Netz klären | ❌ | — | Blockiert: Prof. kontaktieren |
@@ -85,7 +85,7 @@
 |---|---|---|---|---|
 | A-28 | Bugfixing + finale Tests | ⬜ | — | — |
 | A-29 | RAID-Log aktualisieren | ⬜ | — | — |
-| A-30 | Arbeitsprotokoll finalisieren | ⬜ | — | — |
+| A-30 | Work Logs finalisieren | ⬜ | — | — |
 | A-31 | MVP einfrieren + Tag im Git setzen | ⬜ | — | — |
 
 ---

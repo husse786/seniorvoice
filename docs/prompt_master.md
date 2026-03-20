@@ -12,14 +12,14 @@
 Du bist der Coding-Assistent für das Projekt SeniorVoice.
 
 Lies zuerst folgende Dateien im Repo vollständig durch, bevor du irgendetwas tust:
-1. docs/projektantrag.md        — Projektkontext, Architektur, Tech Stack, Scope
-2. docs/arbeitsprotokoll.md     — Was bisher gemacht wurde, getroffene Entscheide, bekannte Probleme
-3. docs/workpackages.md         — Alle Arbeitspakete mit aktuellem Status (⬜ offen / 🔄 in Bearbeitung / ✅ erledigt)
+1. docs/projektantrag.md      — Projektkontext, Architektur, Tech Stack, Scope
+2. docs/current_state.md      — Aktueller Stand, nächster Schritt, offene Blocker
+3. docs/workpackages.md       — Alle Arbeitspakete mit Status (⬜ offen / 🔄 in Bearbeitung / ✅ erledigt)
 
 Sobald du alle drei Dateien gelesen hast:
 1. Fasse in 3–5 Sätzen zusammen was du verstanden hast (Projekt, aktueller Stand, nächster Schritt)
-2. Identifiziere das nächste offene Arbeitspaket (⬜) aus workpackages.md
-3. Frage mich ob wir mit diesem Paket starten sollen, oder ob ich etwas anderes priorisieren will
+2. Nenne das nächste offene Arbeitspaket (⬜) aus current_state.md / workpackages.md
+3. Frage mich ob wir damit starten sollen, oder ob ich etwas anderes priorisieren will
 4. Warte auf meine Bestätigung — dann starte mit der Implementierung
 
 Beim Coden gelten folgende Regeln:
@@ -34,8 +34,9 @@ Beim Coden gelten folgende Regeln:
 - Frage bevor du Annahmen triffst bei Modellnamen, Ports, Pfaden
 
 Nach jeder abgeschlossenen Aufgabe:
-- Sag mir welches Arbeitspaket wir erledigt haben (A-XX)
-- Ich aktualisiere workpackages.md (✅ + Datum + Autor)
+- Nenne das erledigte Arbeitspaket (A-XX)
+- Ich aktualisiere docs/workpackages.md (✅ + Datum + Autor)
+- Ich aktualisiere docs/current_state.md (neuer Stand, nächster Schritt)
 - Dann fahren wir mit dem nächsten Paket fort
 ```
 
@@ -43,11 +44,10 @@ Nach jeder abgeschlossenen Aufgabe:
 
 ## Kurzversion (für Folge-Sessions)
 
-Wenn der Kontext bereits bekannt ist und du nur weitermachen willst:
+Wenn du schnell weitermachen willst ohne langen Kontext-Aufbau:
 
 ```
-Lies docs/workpackages.md und zeig mir den aktuellen Stand.
-Was ist das nächste offene Arbeitspaket?
+Lies docs/current_state.md — was ist der nächste Schritt?
 ```
 
 ---
@@ -58,28 +58,33 @@ Was ist das nächste offene Arbeitspaket?
 Alle Teammitglieder — Yanick, Chris, Sansone, Haris. Jeder kann eine Session starten und am aktuellen Stand weiterarbeiten.
 
 **Was tun nach einer Session?**
-1. `docs/workpackages.md` aktualisieren — erledigte Pakete mit ✅, Datum und deinem Namen
-2. `docs/arbeitsprotokoll.md` — neuen Eintrag hinzufügen (Claude hilft dabei mit dem Projektdokumentation-Skill)
-3. Änderungen committen und pushen:
+
+1. `docs/workpackages.md` aktualisieren — erledigte Pakete mit ✅, Datum und Name
+2. `docs/current_state.md` aktualisieren — Stand, nächster Schritt, Blocker überschreiben
+3. Log-Eintrag erstellen mit dem Projektdokumentation-Skill (Anleitung: `logs/README.md`)
+4. Committen und pushen:
+
 ```bash
 git add .
-git commit -m "feat: [kurze Beschreibung was gemacht wurde]"
+git commit -m "feat: [kurze Beschreibung]"
 git push
 ```
 
 **Branching:**
-- `main` — stabiler Stand, nur via PR
-- `dev` — aktiver Entwicklungszweig
-- `feature/[service-name]` — pro Service ein Branch (z.B. `feature/stt-service`)
+| Branch | Zweck |
+|---|---|
+| `main` | Stabiler Stand — nur via Pull Request |
+| `dev` | Aktiver Entwicklungszweig |
+| `feature/[service-name]` | Pro Service (z.B. `feature/stt-service`) |
 
 **Commit-Konvention:**
 | Prefix | Wann |
 |---|---|
 | `feat:` | Neue Funktionalität |
 | `fix:` | Bugfix |
-| `chore:` | Setup, Konfig, Doku |
+| `chore:` | Setup, Konfig, Dokumentation |
 | `test:` | Tests hinzufügen |
-| `refactor:` | Code umstrukturieren ohne Funktionsänderung |
+| `refactor:` | Umstrukturierung ohne Funktionsänderung |
 
 ---
 
