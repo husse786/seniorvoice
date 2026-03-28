@@ -1,0 +1,106 @@
+# Arbeitsprotokoll SeniorVoice
+
+---
+
+### Eintrag #002 · W02 · Repo-Struktur, Docker-Compose & Orchestrator-Service
+
+**Meta-Informationen**
+
+| Feld | Wert |
+|------|------|
+| Datum | 28.03.2026 |
+| Projektwoche | W02 |
+| Autor | [Autor eintragen] |
+| Dauer | [X Stunden eintragen] |
+| Action-IDs (RAID) | A-04, A-05, A-06 |
+| GitHub Referenz | [Commit Hash / Branch eintragen] |
+| Status | In Bearbeitung |
+
+---
+
+**1 · Ziel dieses Schritts**
+
+Ziel war die Einrichtung der vollständigen Projektstruktur auf dem Raspberry Pi sowie die Implementierung des `orchestrator`-Microservices als zentrales Verbindungsglied zwischen der Spracheingabe (Speech-to-Text = STT) und dem KI-Backend (OpenClaw Gateway). Der Orchestrator nimmt Texteingaben entgegen, leitet diese via HTTP an das OpenClaw Gateway weiter und speichert alle Interaktionen in einer lokalen SQLite-Datenbank. Audio-Ausgabe (Text-to-Speech = TTS) wurde für den MVP bewusst zurückgestellt.
+
+---
+
+**2 · Durchgeführte Aktivitäten**
+
+- Audio-Hardware auf dem Pi inventarisiert via `arecord -l` und `aplay -l`
+  - Erkannte Eingabe: Logitech BRIO Webcam (card 3, USB Audio) als Mikrofon
+  - Kein Lautsprecher vorhanden — TTS-Ausgabe auf spätere Woche verschoben
+- Projektverzeichnisstruktur unter `/root/seniorvoice/` angelegt
+  - Verzeichnisse: `voice-input/`, `orchestrator/`, `dashboard/`, `data/`
+  - Leere Dateien erstellt: `Dockerfile`, `main.py`, `requirements.txt` je Service
+  - `docker-compose.yml` und `.gitignore` angelegt
+- `.gitignore` konfiguriert mit Ausschlüssen: `.env`, `data/`, `__pycache__/`, `*.pyc`
+- `docker-compose.yml` geschrieben mit 3 Services: `voice-input`, `orchestrator`, `dashboard`
+  - Internes Docker-Netzwerk `seniorvoice` (bridge) definiert
+  - `.env`-Variablen für OpenClaw Gateway-URL, Token und Agent-Name referenziert
+  - `data/`-Verzeichnis als Volume in `orchestrator` und `dashboard` eingebunden
+- `orchestrator/requirements.txt` geschrieben: `fastapi==0.115.0`, `uvicorn==0.30.0`, `httpx==0.27.0`, `python-dotenv==1.0.0`
+- `orchestrator/main.py` implementiert (87 Zeilen, FastAPI)
+  - Endpunkte: `GET /health`, `POST /intent`, `GET /logs`
+  - SQLite-Datenbank wird beim Start automatisch initialisiert (Tabelle `logs`)
+  - Jede Interaktion (Eingabe + Antwort + Timestamp) wird in SQLite persistiert
+  - HTTP-Kommunikation mit OpenClaw Gateway via `httpx.AsyncClient` (Timeout 30s)
+  - Bearer-Token-Authentifizierung gegenüber OpenClaw Gateway implementiert
+- `orchestrator/Dockerfile` geschrieben: `python:3.11-slim`, pip install, uvicorn Start
+- Docker Image `seniorvoice-orchestrator` gebaut
+  - Build-Dauer: 65.5 Sekunden
+  - Base Image `python:3.11-slim` (arm64) von Docker Hub geladen
+  - Alle 5 Build-Schritte abgeschlossen ohne Fehler
+
+---
+
+**3 · Technische Entscheide**
+
+| Entscheid | Begründung | Verknüpfung RAID |
+|-----------|-----------|-----------------|
+| TTS (Piper) für MVP zurückgestellt | Kein Lautsprecher vorhanden; Fokus auf Kernpipeline STT → Orchestrator → OpenClaw | D-06 |
+| SQLite statt PostgreSQL für Logging | Ausreichend für MVP-Datenmenge; kein separater DB-Container nötig; spart RAM auf Pi 4 2GB | D-07 |
+| `httpx.AsyncClient` für OpenClaw-Kommunikation | Async-kompatibel mit FastAPI; non-blocking; Timeout konfigurierbar | D-08 |
+| Internes Docker-Netzwerk `seniorvoice` (bridge) | Services kommunizieren intern ohne Portfreigabe nach aussen; nur `orchestrator:8001` und `dashboard:8080` exponiert | D-09 |
+| Logitech BRIO als Mikrofon-Quelle | Bereits vorhanden; USB Audio auf card 3 erkannt; qualitativ besser als einfaches USB-Mikrofon | D-10 |
+
+---
+
+**4 · Probleme & Lösungen**
+
+| Problem | Lösung / Workaround | Issue-ID (RAID) |
+|---------|---------------------|----------------|
+| Heredoc (`<< 'EOF'`) schrieb leere Datei beim ersten Versuch mit `docker-compose.yml` | Delimiter von `EOF` auf `ENDOFFILE` geändert — zweiter Versuch schrieb korrekt | I-04 |
+| Kein Lautsprecher für TTS-Tests verfügbar | TTS-Service (`voice-output`) aus MVP-Scope entfernt; wird in späterer Woche nachgerüstet | I-05 |
+| `orchestrator` noch nicht gestartet und gegen OpenClaw getestet | Ausstehend — nächster Schritt (A-06) | — |
+
+---
+
+**5 · Ergebnis / Lieferobjekte**
+
+- Vollständige Projektstruktur unter `/root/seniorvoice/` vorhanden
+- `docker-compose.yml` mit 3 Services und internem Netzwerk geschrieben
+- `orchestrator/main.py` (87 Zeilen): FastAPI-Service mit `/health`, `/intent`, `/logs`-Endpunkten
+- `orchestrator/Dockerfile` und `requirements.txt` vollständig
+- Docker Image `seniorvoice-orchestrator:latest` gebaut (arm64)
+- SQLite-Logging-Schema definiert (Tabelle `logs`: `id`, `ts`, `input`, `response`)
+- Audio-Eingabe via Logitech BRIO verifiziert (card 3, `hw:3,0`)
+
+---
+
+**6 · Nächste Schritte**
+
+- A-06: `orchestrator`-Container starten (`docker compose up orchestrator -d`) und Logs prüfen
+- A-07: Endpunkt `POST /intent` mit curl testen — Antwort von OpenClaw verifizieren
+- A-08: `voice-input`-Service implementieren (Whisper STT `tiny`-Modell, Logitech BRIO als Quelle)
+- A-09: Lautsprecher beschaffen oder USB-Speaker bestellen für TTS-Integration (R-02)
+- R-02 erfassen: Ohne TTS kein vollständiger Voice-Loop für Demo — Risiko für Demoability
+
+---
+
+**7 · Screenshots / Anhänge**
+
+> [ Screenshot: `find . -not -path './.git/*' | sort` — vollständige Projektstruktur ]
+> [ Screenshot: `arecord -l` — Logitech BRIO als Capture Device card 3 ]
+> [ Screenshot: `docker compose build orchestrator` — Build FINISHED, alle 12 Schritte ]
+> [ Screenshot: `cat /root/seniorvoice/orchestrator/main.py` — FastAPI Service Code ]
+> [ Screenshot: `cat /root/seniorvoice/docker-compose.yml` — Compose-Konfiguration ]
