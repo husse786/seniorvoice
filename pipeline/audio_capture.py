@@ -12,6 +12,9 @@ from config import (
     SILENCE_DURATION,
     MAX_RECORD_SECONDS,
 )
+from logging_config import get_logger
+
+log = get_logger("audio")
 
 
 def find_input_device() -> int:
@@ -29,7 +32,7 @@ def find_input_device() -> int:
 def record_until_silence() -> bytes:
     """Record audio until silence is detected. Returns WAV bytes."""
     device_idx = find_input_device()
-    print(f"[audio] Recording from device {device_idx} ({sd.query_devices(device_idx)['name']})")
+    log.debug("Recording from device %d (%s)", device_idx, sd.query_devices(device_idx)["name"])
 
     frames = []
     silent_chunks = 0
@@ -57,14 +60,14 @@ def record_until_silence() -> bytes:
                 silent_chunks = 0
 
             if silent_chunks >= silence_chunks_needed and len(frames) > silence_chunks_needed:
-                print(f"[audio] Silence detected after {len(frames) * chunk_duration:.1f}s")
+                log.debug("Silence detected after %.1fs", len(frames) * chunk_duration)
                 break
 
     if not frames:
         raise RuntimeError("No audio captured")
 
     audio_data = np.concatenate(frames)
-    print(f"[audio] Captured {len(audio_data) / AUDIO_SAMPLE_RATE:.1f}s of audio")
+    log.info("Captured %.1fs of audio", len(audio_data) / AUDIO_SAMPLE_RATE)
 
     # Convert to WAV bytes
     buf = io.BytesIO()
@@ -80,4 +83,4 @@ def save_wav(wav_bytes: bytes, path: str) -> None:
     """Save WAV bytes to a file."""
     with open(path, "wb") as f:
         f.write(wav_bytes)
-    print(f"[audio] Saved to {path}")
+    log.debug("Saved to %s", path)

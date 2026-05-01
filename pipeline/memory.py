@@ -8,9 +8,11 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-from config import MEMORY_DB_PATH, LLM_API_BASE, LLM_API_KEY, LLM_MODEL
+from config import MEMORY_DB_PATH, LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_TIMEOUT
+from logging_config import get_logger
 
-_EXTRACTION_TIMEOUT = 60  # seconds — longer than chat() since user doesn't wait
+log = get_logger("memory")
+
 _EXTRACTION_RETRIES = 2   # total attempts
 _PENDING_DIR = Path(MEMORY_DB_PATH).parent / "pending_extractions"
 
@@ -149,14 +151,13 @@ def _call_llm_for_extraction(messages: list[dict]) -> str:
         "messages": messages,
         "stream": False,
     }
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LLM_API_KEY}",
-    }
+    headers = {"Content-Type": "application/json"}
+    if LLM_API_KEY:
+        headers["Authorization"] = f"Bearer {LLM_API_KEY}"
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
 
-    with urllib.request.urlopen(req, timeout=_EXTRACTION_TIMEOUT) as resp:
+    with urllib.request.urlopen(req, timeout=LLM_TIMEOUT * 2) as resp:
         data = json.loads(resp.read().decode("utf-8"))
         return data["choices"][0]["message"]["content"]
 
@@ -173,7 +174,7 @@ def _parse_facts_json(raw: str) -> list[dict]:
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        print(f"[memory] Failed to parse facts JSON: {text[:200]}")
+        log.warning("Failed to parse facts JSON: %s", text[:200])
         return []
 
     if not isinstance(parsed, list):
@@ -191,7 +192,7 @@ def _save_pending(history: list[dict], source: str) -> None:
     _PENDING_DIR.mkdir(parents=True, exist_ok=True)
     path = _PENDING_DIR / f"{source}.json"
     path.write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
-    print(f"[memory] Saved pending extraction to {path}")
+    log.info("Saved pending extraction to %s", path)
 
 
 def _process_pending() -> None:
@@ -202,11 +203,11 @@ def _process_pending() -> None:
         try:
             history = json.loads(path.read_text(encoding="utf-8"))
             source = path.stem
-            print(f"[memory] Retrying pending extraction: {source}")
+            log.info("Retrying pending extraction: %s", source)
             _do_extract(history, source)
             path.unlink()  # success — remove pending file
         except Exception as e:
-            print(f"[memory] Pending retry failed ({path.name}): {e}")
+            log.error("Pending retry failed (%s): %s", path.name, e)
 
 
 def _do_extract(history: list[dict], source: str) -> bool:
@@ -227,12 +228,12 @@ def _do_extract(history: list[dict], source: str) -> bool:
             facts = _parse_facts_json(raw_response)
             if facts:
                 stored = store_facts(facts, source=source)
-                print(f"[memory] Extracted and stored {stored} fact(s)")
+                log.info("Extracted and stored %d fact(s)", stored)
             else:
-                print("[memory] No new facts extracted from conversation")
+                log.debug("No new facts extracted from conversation")
             return True
         except Exception as e:
-            print(f"[memory] Extraction attempt {attempt}/{_EXTRACTION_RETRIES} failed: {e}")
+            log.warning("Extraction attempt %d/%d failed: %s", attempt, _EXTRACTION_RETRIES, e)
             if attempt < _EXTRACTION_RETRIES:
                 time.sleep(2)
 
@@ -264,7 +265,7 @@ def extract_facts_async(history: list[dict], source: str = "") -> None:
         daemon=True,
     )
     thread.start()
-    print("[memory] Fact extraction started in background")
+    log.debug("Fact extraction started in background")
 
 
 def retry_pending_extractions() -> None:

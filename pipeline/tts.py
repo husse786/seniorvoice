@@ -4,6 +4,9 @@ import subprocess
 import shutil
 from pathlib import Path
 from config import PIPER_VOICE, OUTPUT_DIR
+from logging_config import get_logger
+
+log = get_logger("tts")
 
 
 def synthesize(text: str) -> Path:
@@ -15,7 +18,7 @@ def synthesize(text: str) -> Path:
     if piper_bin is None:
         raise RuntimeError("piper not found in PATH. Install with: pip install piper-tts")
 
-    print(f"[tts] Synthesizing: {text[:80]}...")
+    log.debug("Synthesizing: %s...", text[:80])
     result = subprocess.run(
         [piper_bin, "--model", PIPER_VOICE, "--output_file", str(output_path)],
         input=text,
@@ -27,7 +30,7 @@ def synthesize(text: str) -> Path:
     if result.returncode != 0:
         raise RuntimeError(f"Piper TTS failed: {result.stderr}")
 
-    print(f"[tts] Saved to {output_path}")
+    log.debug("Saved to %s", output_path)
     return output_path
 
 
@@ -41,12 +44,12 @@ def play(wav_path: Path) -> None:
     elif aplay:
         cmd = [aplay, str(wav_path)]
     else:
-        print(f"[tts] No audio player found. WAV saved at: {wav_path}")
+        log.warning("No audio player found. WAV saved at: %s", wav_path)
         return
 
-    print(f"[tts] Playing on speaker...")
+    log.debug("Playing on speaker...")
     subprocess.run(cmd, timeout=30, check=True)
-    print("[tts] Playback done")
+    log.debug("Playback done")
 
 
 def speak(text: str) -> None:

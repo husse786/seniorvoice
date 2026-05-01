@@ -1,9 +1,12 @@
-"""LLM client — calls Moonshot Kimi API (OpenAI-compatible chat completions)."""
+"""LLM client — OpenAI-compatible chat completions (Moonshot Kimi or local Ollama)."""
 
 import json
 import urllib.request
 import urllib.error
-from config import LLM_API_BASE, LLM_API_KEY, LLM_MODEL, MEMORY_MAX_TURNS
+from config import LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_TIMEOUT, MEMORY_MAX_TURNS
+from logging_config import get_logger
+
+log = get_logger("llm")
 
 _BASE_SYSTEM_PROMPT = (
     "Du bist SeniorAgent, ein freundlicher und geduldiger Sprachassistent "
@@ -22,9 +25,6 @@ def build_system_prompt(facts_block: str = "") -> str:
 
 def chat(user_message: str, history: list[dict] | None = None, facts_block: str = "") -> tuple[str, list[dict]]:
     """Send a message to the LLM and return (response, updated_history)."""
-    if not LLM_API_KEY:
-        raise RuntimeError("LLM_API_KEY not set. Export it: export LLM_API_KEY=your-key")
-
     if history is None:
         history = []
 
@@ -41,19 +41,18 @@ def chat(user_message: str, history: list[dict] | None = None, facts_block: str 
         "stream": False,
     }
 
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LLM_API_KEY}",
-    }
+    headers = {"Content-Type": "application/json"}
+    if LLM_API_KEY:
+        headers["Authorization"] = f"Bearer {LLM_API_KEY}"
 
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
 
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=LLM_TIMEOUT) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             reply = data["choices"][0]["message"]["content"]
-            print(f"[llm] Response: {reply}")
+            log.debug("LLM response received (%d chars)", len(reply))
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"LLM API error {e.code}: {error_body}") from e

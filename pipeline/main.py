@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
-"""SeniorVoice MVP Pipeline: PIR → Record → STT → Moonshot LLM → TTS → Speaker."""
+"""SeniorVoice MVP Pipeline: PIR -> Record -> STT -> Moonshot LLM -> TTS -> Speaker."""
 
 import sys
 import time
 import argparse
 
+from logging_config import setup_logging, get_logger
 from config import MEMORY_TIMEOUT
 from memory import (
     load_facts, format_facts_for_prompt, extract_facts_async,
     extract_and_store_facts, retry_pending_extractions,
 )
+from sounds import play_sound
+from interaction_log import log_interaction
+
+setup_logging()
+log = get_logger("pipeline")
 
 RESET_PHRASES = ["neue frage", "neues thema", "von vorne", "neues gespräch"]
 
@@ -33,7 +39,7 @@ def _reload_facts() -> tuple[list[dict], str]:
     facts = load_facts()
     facts_block = format_facts_for_prompt(facts)
     if facts:
-        print(f"[pipeline] Loaded {len(facts)} fact(s) from memory")
+        log.info("Loaded %d fact(s) from memory", len(facts))
     return facts, facts_block
 
 
@@ -51,6 +57,12 @@ def run_pipeline(
     from llm_client import chat
     from tts import speak
 
+    trigger_type = "pir" if use_pir else "keyboard"
+    t_start = time.perf_counter()
+    stt_ms = llm_ms = tts_ms = None
+    user_text = ""
+    response_text = ""
+
     # Step 1: Wait for trigger
     if use_pir:
         from sensor import wait_for_motion
@@ -58,41 +70,67 @@ def run_pipeline(
         # Small delay after motion to let the person settle
         time.sleep(0.5)
     else:
-        input("\n[pipeline] Press ENTER to start recording...")
+        input("\n[Press ENTER to start recording...]")
+
+    play_sound("listen")
 
     # Step 2: Record audio
-    print("\n--- Listening... ---")
+    log.info("Listening...")
     wav_bytes = record_until_silence()
 
     # Step 3: Transcribe
-    print("\n--- Transcribing... ---")
+    log.info("Transcribing...")
+    t_stt = time.perf_counter()
     text = transcribe(wav_bytes)
+    stt_ms = int((time.perf_counter() - t_stt) * 1000)
 
     if not text.strip():
-        print("[pipeline] No speech detected, skipping.")
+        log.info("No speech detected, skipping")
+        log_interaction(trigger_type=trigger_type, error="no_speech")
         return history, None
 
-    print(f"\n--- You said: {text} ---")
+    user_text = text
+    log.info("User said: %s", text)
 
     # Step 3b: Check for verbal conversation reset
     pre_reset_history = None
     should_reset, cleaned_text = _check_reset(text)
     if should_reset:
-        print("[pipeline] Conversation reset (verbal trigger)")
+        log.info("Conversation reset (verbal trigger)")
         pre_reset_history = list(history)  # snapshot for fact extraction
         history = []
 
     # Step 4: Get LLM response
-    print("\n--- Thinking... ---")
+    play_sound("thinking")
+    log.info("Thinking...")
+    t_llm = time.perf_counter()
     response, history = chat(cleaned_text, history, facts_block=facts_block)
+    llm_ms = int((time.perf_counter() - t_llm) * 1000)
 
-    print(f"\n--- Response: {response} ---")
+    response_text = response
+    log.info("Response: %s", response)
 
     # Step 5: Speak the response
-    print("\n--- Speaking... ---")
+    log.info("Speaking...")
+    t_tts = time.perf_counter()
     speak(response)
+    tts_ms = int((time.perf_counter() - t_tts) * 1000)
 
-    print("\n--- Done ---\n")
+    total_ms = int((time.perf_counter() - t_start) * 1000)
+    log.info("Interaction complete (stt=%dms, llm=%dms, tts=%dms, total=%dms)",
+             stt_ms, llm_ms, tts_ms, total_ms)
+
+    # Log interaction to SQLite
+    log_interaction(
+        trigger_type=trigger_type,
+        user_text=user_text,
+        response_text=response_text,
+        stt_duration_ms=stt_ms,
+        llm_duration_ms=llm_ms,
+        tts_duration_ms=tts_ms,
+        total_duration_ms=total_ms,
+    )
+
     return history, pre_reset_history
 
 
@@ -112,7 +150,7 @@ def main():
 
     use_pir = not args.no_pir
     mode = "PIR sensor" if use_pir else "keyboard (ENTER)"
-    print(f"[pipeline] SeniorVoice MVP starting (trigger: {mode})")
+    log.info("SeniorVoice starting (trigger: %s)", mode)
 
     # Pre-load the STT model on startup
     from stt import get_model
@@ -133,7 +171,7 @@ def main():
                 # Timeout: reset history after inactivity
                 if time.time() - last_interaction > MEMORY_TIMEOUT:
                     if history:
-                        print(f"[pipeline] Conversation reset (timeout {MEMORY_TIMEOUT}s)")
+                        log.info("Conversation reset (timeout %ds)", MEMORY_TIMEOUT)
                         extract_facts_async(history, source=f"timeout-{int(time.time())}")
                         history = []
                         facts, facts_block = _reload_facts()
@@ -151,16 +189,16 @@ def main():
             except KeyboardInterrupt:
                 raise
             except Exception as e:
-                print(f"[pipeline] Error: {e}", file=sys.stderr)
+                log.error("Pipeline error: %s", e, exc_info=True)
                 time.sleep(1)
 
             if args.once:
                 break
     except KeyboardInterrupt:
         if history:
-            print("\n[pipeline] Extracting facts before shutdown...")
+            log.info("Extracting facts before shutdown...")
             extract_and_store_facts(history, source=f"shutdown-{int(time.time())}")
-        print("\n[pipeline] Shutting down.")
+        log.info("Shutting down.")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""PIR motion sensor (HC-SR501) on GPIO17 via lgpio (Pi 5 RP1 chip)."""
+"""PIR motion sensor (HC-SR501) on GPIO4 via lgpio (Pi 5 RP1 chip)."""
 
 import time
 
@@ -8,6 +8,9 @@ except ImportError:
     lgpio = None
 
 from config import PIR_GPIO_PIN, PIR_GPIO_CHIP
+from logging_config import get_logger
+
+log = get_logger("sensor")
 
 
 def _check_lgpio():
@@ -22,13 +25,13 @@ def wait_for_motion() -> None:
     h = lgpio.gpiochip_open(PIR_GPIO_CHIP)
     try:
         lgpio.gpio_claim_input(h, PIR_GPIO_PIN)
-        print(f"[sensor] Waiting for motion on GPIO{PIR_GPIO_PIN} (chip {PIR_GPIO_CHIP})...")
+        log.info("Waiting for motion on GPIO%d (chip %d)...", PIR_GPIO_PIN, PIR_GPIO_CHIP)
 
         # Wait for HIGH signal
         while True:
             val = lgpio.gpio_read(h, PIR_GPIO_PIN)
             if val == 1:
-                print("[sensor] Motion detected!")
+                log.info("Motion detected!")
                 return
             time.sleep(0.1)
     finally:

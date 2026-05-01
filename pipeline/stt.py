@@ -5,6 +5,9 @@ import wave
 import numpy as np
 from faster_whisper import WhisperModel
 from config import WHISPER_MODEL, WHISPER_DEVICE, WHISPER_LANGUAGE
+from logging_config import get_logger
+
+log = get_logger("stt")
 
 _model = None
 
@@ -13,9 +16,9 @@ def get_model() -> WhisperModel:
     """Lazy-load the Whisper model."""
     global _model
     if _model is None:
-        print(f"[stt] Loading whisper model '{WHISPER_MODEL}' on {WHISPER_DEVICE}...")
+        log.info("Loading whisper model '%s' on %s...", WHISPER_MODEL, WHISPER_DEVICE)
         _model = WhisperModel(WHISPER_MODEL, device=WHISPER_DEVICE, compute_type="int8")
-        print("[stt] Model loaded")
+        log.info("Model loaded")
     return _model
 
 
@@ -31,5 +34,5 @@ def transcribe(wav_bytes: bytes) -> str:
     segments, info = model.transcribe(audio, language=WHISPER_LANGUAGE, beam_size=5)
 
     text = " ".join(seg.text.strip() for seg in segments)
-    print(f"[stt] Transcribed ({info.language}, {info.language_probability:.0%}): {text}")
+    log.info("Transcribed (%s, %.0f%%): %s", info.language, info.language_probability * 100, text)
     return text
