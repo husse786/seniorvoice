@@ -13,6 +13,7 @@ Dieses Verzeichnis enthält alle technischen Arbeitsprotokoll-Einträge des Proj
 | Log ID | Woche | Inhalt | Datum | Autor |
 |---|---|---|---|---|
 | [001](001_log_20032026.md) | W05 | Pi Setup, Security Hardening & Repo Setup | 20.03.2026 | Yanick |
+| [007](raspi5-yanick/007_log_01052026.md) | W11 | PIR-Sensor Integration, Conversation Memory & Long-Term Memory | 01.05.2026 | Yanick |
 
 ---
 
