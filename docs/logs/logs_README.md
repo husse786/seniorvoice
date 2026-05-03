@@ -16,7 +16,7 @@ Dieses Verzeichnis enthält alle technischen Arbeitsprotokoll-Einträge des Proj
 | [007](raspi5-yanick/007_log_01052026.md) | W11 | PIR-Sensor Integration, Conversation Memory & Long-Term Memory | 01.05.2026 | Yanick |
 | [008](raspi5-yanick/008_log_02052026.md) | W11 | Structured Logging, Kimi Migration & Audio-Feedback | 02.05.2026 | Yanick |
 | [010](raspi5-yanick/010_log_03052026.md) | W11 | LLM-Modell-Benchmark: 9 lokale Modelle + Kimi Cloud | 03.05.2026 | Yanick |
-| [011](raspi5-yanick/011_log_03052026.md) | W11 | Performance-Tuning: SQLite-Logging, CPU Governor, Modell-Varianten & LFM2.5 | 03.05.2026 | Yanick |
+| [011](raspi5-yanick/011_log_03052026.md) | W11 | Performance-Tuning: SQLite-Logging, CPU Governor, Modell-Varianten, LFM2.5 & Overclock (2.8 GHz) | 03.05.2026 | Yanick |
 
 ---
 
