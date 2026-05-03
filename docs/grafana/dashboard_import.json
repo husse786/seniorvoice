@@ -1,0 +1,202 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "afky2gy36rqbka",
+    "title": "SeniorVoice Performance",
+    "tags": ["seniorvoice", "benchmark", "llm"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "schemaVersion": 39,
+    "panels": [
+      {
+        "id": 1,
+        "title": "Benchmark: tok/s by Model",
+        "type": "barchart",
+        "gridPos": {"h": 10, "w": 12, "x": 0, "y": 0},
+        "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+        "targets": [{
+          "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+          "rawQueryText": "SELECT model || ' (' || model_variant || ')' AS model_config, avg_tps FROM benchmark_aggregates WHERE avg_tps IS NOT NULL ORDER BY avg_tps DESC",
+          "queryType": "table",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "options": {
+          "xTickLabelRotation": -45,
+          "xTickLabelMaxLength": 25
+        }
+      },
+      {
+        "id": 2,
+        "title": "Benchmark: TTFT by Model",
+        "type": "barchart",
+        "gridPos": {"h": 10, "w": 12, "x": 12, "y": 0},
+        "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+        "targets": [{
+          "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+          "rawQueryText": "SELECT model || ' (' || model_variant || ')' AS model_config, avg_ttft_ms FROM benchmark_aggregates WHERE avg_ttft_ms IS NOT NULL ORDER BY avg_ttft_ms ASC",
+          "queryType": "table",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "options": {
+          "xTickLabelRotation": -45,
+          "xTickLabelMaxLength": 25
+        }
+      },
+      {
+        "id": 3,
+        "title": "Benchmark History: tok/s over Time",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 10},
+        "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+        "targets": [{
+          "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+          "rawQueryText": "SELECT timestamp, avg_tps, model || ' (' || model_variant || ')' AS metric FROM benchmark_aggregates WHERE avg_tps IS NOT NULL ORDER BY timestamp",
+          "queryType": "table",
+          "refId": "A"
+        }],
+        "transformations": [
+          {
+            "id": "convertFieldType",
+            "options": {
+              "conversions": [
+                {"targetField": "timestamp", "destinationType": "time"}
+              ]
+            }
+          },
+          {
+            "id": "partitionByValues",
+            "options": {
+              "fields": ["metric"],
+              "keepFields": false
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "pointSize": 6,
+              "showPoints": "always"
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {"displayMode": "table", "placement": "bottom"},
+          "tooltip": {"mode": "multi"}
+        }
+      },
+      {
+        "id": 4,
+        "title": "Live Interaction Latency",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 18, "x": 0, "y": 18},
+        "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+        "targets": [{
+          "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+          "rawQueryText": "SELECT timestamp, stt_duration_ms AS \"STT\", llm_duration_ms AS \"LLM\", tts_duration_ms AS \"TTS\", total_duration_ms AS \"Total\" FROM interactions WHERE error IS NULL ORDER BY timestamp",
+          "queryType": "table",
+          "refId": "A"
+        }],
+        "transformations": [
+          {
+            "id": "convertFieldType",
+            "options": {
+              "conversions": [
+                {"targetField": "timestamp", "destinationType": "time"}
+              ]
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "custom": {
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "showPoints": "always"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Total"},
+              "properties": [
+                {"id": "custom.lineWidth", "value": 3},
+                {"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull", "max"]},
+          "tooltip": {"mode": "multi"}
+        }
+      },
+      {
+        "id": 5,
+        "title": "Interaction Errors",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 18},
+        "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+        "targets": [
+          {
+            "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+            "rawQueryText": "SELECT COUNT(*) AS \"Total Interactions\" FROM interactions",
+            "queryType": "table",
+            "refId": "A"
+          },
+          {
+            "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+            "rawQueryText": "SELECT COUNT(*) AS \"Errors\" FROM interactions WHERE error IS NOT NULL",
+            "queryType": "table",
+            "refId": "B"
+          },
+          {
+            "datasource": {"type": "frser-sqlite-datasource", "uid": "ffky29gcf09oga"},
+            "rawQueryText": "SELECT ROUND(100.0 * SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) / MAX(COUNT(*), 1), 1) AS \"Error Rate %\" FROM interactions",
+            "queryType": "table",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 5},
+                {"color": "red", "value": 20}
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Total Interactions"},
+              "properties": [
+                {"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}
+              ]
+            }
+          ]
+        },
+        "options": {
+          "reduceOptions": {"calcs": ["lastNotNull"]},
+          "orientation": "vertical",
+          "textMode": "auto",
+          "colorMode": "background"
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

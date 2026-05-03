@@ -1,0 +1,344 @@
+{
+  "panels": [
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ffky29gcf09oga"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisLabel": "Tokens/sec",
+            "fillOpacity": 80,
+            "gradientMode": "none"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "barWidth": 0.7,
+        "legend": {
+          "displayMode": "hidden"
+        },
+        "orientation": "horizontal",
+        "showValue": "always"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "ffky29gcf09oga"
+          },
+          "queryType": "table",
+          "rawQueryText": "SELECT model || ' (' || model_variant || ')' AS \"Model\", avg_tps AS \"tok/s\" FROM benchmark_aggregates WHERE avg_tps IS NOT NULL ORDER BY avg_tps DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Benchmark: tok/s by Model",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ffky29gcf09oga"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisLabel": "TTFT (ms)",
+            "fillOpacity": 80,
+            "gradientMode": "none"
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "barWidth": 0.7,
+        "legend": {
+          "displayMode": "hidden"
+        },
+        "orientation": "horizontal",
+        "showValue": "always"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "ffky29gcf09oga"
+          },
+          "queryType": "table",
+          "rawQueryText": "SELECT model || ' (' || model_variant || ')' AS \"Model\", avg_ttft_ms AS \"TTFT (ms)\" FROM benchmark_aggregates WHERE avg_ttft_ms IS NOT NULL ORDER BY avg_ttft_ms ASC",
+          "refId": "A"
+        }
+      ],
+      "title": "Benchmark: TTFT by Model",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ffky29gcf09oga"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "tok/s",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 6,
+            "showPoints": "always",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "ffky29gcf09oga"
+          },
+          "queryType": "time series",
+          "rawQueryText": "SELECT timestamp AS \"time\", avg_tps AS \"value\", model || ' (' || model_variant || ')' AS \"metric\" FROM benchmark_aggregates WHERE avg_tps IS NOT NULL ORDER BY timestamp",
+          "refId": "A"
+        }
+      ],
+      "title": "Benchmark History: tok/s over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ffky29gcf09oga"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Duration (ms)",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 0,
+        "y": 16
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "ffky29gcf09oga"
+          },
+          "queryType": "time series",
+          "rawQueryText": "SELECT timestamp AS \"time\", stt_duration_ms AS \"STT\", llm_duration_ms AS \"LLM\", tts_duration_ms AS \"TTS\", total_duration_ms AS \"Total\" FROM interactions WHERE error IS NULL ORDER BY timestamp",
+          "refId": "A"
+        }
+      ],
+      "title": "Live Interaction Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ffky29gcf09oga"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total Interactions"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "orientation": "vertical",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "ffky29gcf09oga"
+          },
+          "queryType": "table",
+          "rawQueryText": "SELECT COUNT(*) AS \"Total Interactions\" FROM interactions",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "ffky29gcf09oga"
+          },
+          "queryType": "table",
+          "rawQueryText": "SELECT COUNT(*) AS \"Errors\" FROM interactions WHERE error IS NOT NULL",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "ffky29gcf09oga"
+          },
+          "queryType": "table",
+          "rawQueryText": "SELECT ROUND(100.0 * SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) / MAX(COUNT(*), 1), 1) AS \"Error Rate %\" FROM interactions",
+          "refId": "C"
+        }
+      ],
+      "title": "Interaction Errors",
+      "type": "stat"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "seniorvoice",
+    "benchmark",
+    "llm"
+  ],
+  "timezone": "browser",
+  "title": "SeniorVoice Performance",
+  "uid": "afky2gy36rqbka"
+}
