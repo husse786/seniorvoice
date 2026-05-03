@@ -1,12 +1,13 @@
 """Persistent long-term memory — SQLite-backed fact store for SeniorVoice."""
 
 import json
+import re
 import sqlite3
 import threading
 import time
 from pathlib import Path
 
-from config import MEMORY_DB_PATH, LLM_TIMEOUT
+from config import MEMORY_DB_PATH, LLM_TIMEOUT, LLM_BACKENDS, LLM_API_KEY
 from llm_backend import complete as llm_complete
 from logging_config import get_logger
 
@@ -30,23 +31,13 @@ CREATE INDEX IF NOT EXISTS idx_user_facts_active ON user_facts(active) WHERE act
 """
 
 FACT_EXTRACTION_PROMPT = """\
-Du bist ein Informationsextraktor. Analysiere das folgende Gespraech zwischen einem Sprachassistenten und einer aelteren Person.
+Extrahiere Fakten ueber den Benutzer aus diesem Gespraech.
+Nur was der BENUTZER gesagt hat. Antworte NUR mit JSON.
 
-Extrahiere ALLE persoenlichen Fakten, die der BENUTZER ueber sich preisgegeben hat. Nur Fakten, die der BENUTZER gesagt hat, nicht der Assistent.
+Format: [{"category": "persoenlich", "key": "name", "value": "Albert"}]
 
-Antworte NUR mit einem JSON-Array. Jedes Element hat genau drei Felder:
-- "category": Eine von: "persoenlich", "gesundheit", "vorlieben", "termine", "kontakte", "sonstiges"
-- "key": Ein kurzer Schluessel (z.B. "name", "arzt", "lieblingsessen")
-- "value": Der Wert als kurzer Text
-
-Wenn keine Fakten vorhanden sind, antworte mit einem leeren Array: []
-
-Beispiel:
-[
-  {"category": "persoenlich", "key": "name", "value": "Janik"},
-  {"category": "gesundheit", "key": "medikament", "value": "Blutdrucktablette morgens"},
-  {"category": "kontakte", "key": "arzt", "value": "Dr. Mueller, Praxis Zentrum"}
-]
+Kategorien: persoenlich, gesundheit, vorlieben, termine, kontakte, sonstiges
+Keine Fakten? Antworte: []
 
 Gespraech:
 """
@@ -148,18 +139,30 @@ def _call_llm_for_extraction(messages: list[dict]) -> str:
 
 
 def _parse_facts_json(raw: str) -> list[dict]:
-    """Parse the LLM response into a list of fact dicts."""
+    """Parse the LLM response into a list of fact dicts.
+
+    Robust against common small-model quirks: extra prose around JSON,
+    markdown fences, trailing commas, single quotes.
+    """
     text = raw.strip()
+    log.debug("Raw extraction response: %s", text[:500])
+
     # Strip markdown code fences if present
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        text = "\n".join(lines).strip()
+    text = re.sub(r"```(?:json)?\s*", "", text).strip()
+
+    # Try to find a JSON array anywhere in the response
+    # (small models often wrap the array in explanatory text)
+    match = re.search(r"\[.*\]", text, re.DOTALL)
+    if match:
+        text = match.group(0)
+
+    # Fix trailing commas before ] (common small-model mistake)
+    text = re.sub(r",\s*\]", "]", text)
 
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        log.warning("Failed to parse facts JSON: %s", text[:200])
+        log.warning("Failed to parse facts JSON: %s", text[:300])
         return []
 
     if not isinstance(parsed, list):
@@ -204,7 +207,8 @@ def _do_extract(history: list[dict], source: str) -> bool:
     conversation_text = "\n".join(conversation_lines)
 
     messages = [
-        {"role": "system", "content": FACT_EXTRACTION_PROMPT + conversation_text}
+        {"role": "system", "content": FACT_EXTRACTION_PROMPT},
+        {"role": "user", "content": conversation_text},
     ]
 
     for attempt in range(1, _EXTRACTION_RETRIES + 1):
@@ -230,7 +234,12 @@ def extract_and_store_facts(history: list[dict], source: str = "") -> None:
 
     On failure after retries, saves history to disk for retry on next startup.
     """
-    if not history or not LLM_API_KEY:
+    if not history:
+        return
+    # Skip if no backend can handle extraction:
+    # - "default" mode needs an API key (cloud-only)
+    # - named backends (e.g. "ollama,kimi") have their own config
+    if LLM_BACKENDS == "default" and not LLM_API_KEY:
         return
 
     success = _do_extract(history, source)

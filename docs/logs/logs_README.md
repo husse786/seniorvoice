@@ -17,6 +17,7 @@ Dieses Verzeichnis enthält alle technischen Arbeitsprotokoll-Einträge des Proj
 | [008](raspi5-yanick/008_log_02052026.md) | W11 | Structured Logging, Kimi Migration & Audio-Feedback | 02.05.2026 | Yanick |
 | [010](raspi5-yanick/010_log_03052026.md) | W11 | LLM-Modell-Benchmark: 9 lokale Modelle + Kimi Cloud | 03.05.2026 | Yanick |
 | [011](raspi5-yanick/011_log_03052026.md) | W11 | Performance-Tuning & Grafana Dashboard: SQLite-Logging, CPU Governor, Overclock (2.8 GHz), Live-Monitoring | 03.05.2026 | Yanick |
+| [012](raspi5-yanick/012_log_03052026.md) | W11 | Demo-Vorbereitung: System Prompt, Faktenretention & Context-Window-Tuning | 03.05.2026 | Yanick |
 
 ---
 

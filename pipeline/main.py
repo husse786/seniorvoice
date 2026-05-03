@@ -163,6 +163,15 @@ def main():
     from stt import get_model
     get_model()
 
+    # Warm up LLM backend (Ollama keeps models in RAM after first call)
+    from llm_backend import complete as _llm_warmup
+    try:
+        log.info("Warming up LLM backend...")
+        _llm_warmup([{"role": "user", "content": "Hallo"}], timeout_override=60)
+        log.info("LLM backend ready")
+    except Exception as e:
+        log.warning("LLM warmup failed (will retry on first interaction): %s", e)
+
     # Retry any pending extractions from previous failed runs
     retry_pending_extractions()
 

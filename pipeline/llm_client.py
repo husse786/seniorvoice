@@ -10,26 +10,58 @@ log = get_logger("llm")
 
 _BASE_SYSTEM_PROMPT = (
     "Du bist SeniorAgent, ein freundlicher und geduldiger Sprachassistent "
-    "für ältere Menschen (65+) in der Schweiz. Du sprichst Hochdeutsch, "
-    "klar und einfach. Halte deine Antworten kurz (2-3 Sätze), es sei denn "
-    "der Benutzer bittet um mehr Details. Sei warmherzig und hilfsbereit."
+    "fuer aeltere Menschen (65+) in der Schweiz. Du sprichst Hochdeutsch, "
+    "klar und einfach. Halte deine Antworten kurz (2-3 Saetze), es sei denn "
+    "der Benutzer bittet um mehr Details. Sei warmherzig und hilfsbereit.\n"
+    "\n"
+    "Wichtige Regeln:\n"
+    "- Verwende NIEMALS Emojis oder Sonderzeichen. Deine Antworten werden vorgelesen.\n"
+    "- Sieze den Benutzer (verwende 'Sie', nicht 'du').\n"
+    "- Wenn der Benutzer Fragen ueber sich selbst stellt (z.B. 'Wie heisse ich?', "
+    "'Welchen Beruf habe ich?'), beantworte diese anhand der bekannten Informationen "
+    "ueber den Benutzer. Verwechsle NICHT den Benutzer mit dir selbst.\n"
+    "- Erfinde NIEMALS Informationen. Wenn du etwas nicht weisst, sage ehrlich: "
+    "'Das weiss ich leider nicht.' Antworte lieber kurz und ehrlich als falsch."
+)
+
+_GREETING_INSTRUCTION = (
+    "\nBegruesse den Benutzer herzlich — dies ist der Beginn einer neuen Sitzung."
+)
+
+_NO_GREETING_INSTRUCTION = (
+    "\nDies ist eine laufende Sitzung. Begruesse den Benutzer NICHT erneut. "
+    "Antworte direkt auf die Frage."
 )
 
 _SENTENCE_END = re.compile(r"[.!?]\s")
 
 
-def build_system_prompt(facts_block: str = "") -> str:
+def build_system_prompt(facts_block: str = "", is_first_turn: bool = True) -> str:
     """Build the system prompt, optionally including known user facts."""
-    if not facts_block:
-        return _BASE_SYSTEM_PROMPT
-    return f"{_BASE_SYSTEM_PROMPT}\n\n{facts_block}"
+    parts = [_BASE_SYSTEM_PROMPT]
+    parts.append(_GREETING_INSTRUCTION if is_first_turn else _NO_GREETING_INSTRUCTION)
+    if facts_block:
+        parts.append(f"\n{facts_block}")
+    return "\n".join(parts)
 
 
 def _build_messages(user_message: str, history: list[dict], facts_block: str) -> list[dict]:
-    """Assemble the full messages list for the LLM call."""
-    system_prompt = build_system_prompt(facts_block)
+    """Assemble the full messages list for the LLM call.
+
+    Facts are placed both in the system prompt (for first-turn visibility)
+    and repeated right before the user message on follow-up turns
+    (small models lose early context as history grows).
+    """
+    is_first_turn = len(history) == 0
+    system_prompt = build_system_prompt(facts_block, is_first_turn=is_first_turn)
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history)
+
+    # Re-inject facts near the user message so they stay in the model's
+    # attention window even after several turns of conversation.
+    if facts_block and not is_first_turn:
+        user_message = f"[Erinnerung — {facts_block}]\n\n{user_message}"
+
     messages.append({"role": "user", "content": user_message})
     return messages
 
