@@ -21,10 +21,128 @@ Usage:
 
 import argparse
 import json
+import os
+import sqlite3
 import sys
 import time
 import urllib.request
 import urllib.error
+import uuid
+from pathlib import Path
+
+from logging_config import get_logger, setup_logging
+from config import DB_PATH
+
+log = get_logger("benchmark")
+
+# ---------------------------------------------------------------------------
+# SQLite logging (best-effort — never crashes the benchmark)
+# ---------------------------------------------------------------------------
+
+_BENCHMARK_INIT_SQL = """\
+CREATE TABLE IF NOT EXISTS benchmark_results (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')),
+    run_id            TEXT NOT NULL,
+    model             TEXT NOT NULL,
+    model_variant     TEXT NOT NULL DEFAULT 'stock',
+    prompt            TEXT NOT NULL,
+    prompt_number     INTEGER NOT NULL,
+    round_number      INTEGER NOT NULL,
+    tokens_per_second REAL,
+    ttft_ms           REAL,
+    total_ms          REAL,
+    token_count       INTEGER,
+    response_text     TEXT,
+    is_cold_start     INTEGER NOT NULL DEFAULT 0,
+    error             TEXT DEFAULT NULL,
+    api_base          TEXT,
+    num_rounds        INTEGER,
+    timeout           INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS benchmark_aggregates (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')),
+    run_id            TEXT NOT NULL,
+    model             TEXT NOT NULL,
+    model_variant     TEXT NOT NULL DEFAULT 'stock',
+    valid_count       INTEGER,
+    error_count       INTEGER,
+    avg_tps           REAL,
+    avg_ttft_ms       REAL,
+    avg_total_ms      REAL,
+    min_ttft_ms       REAL,
+    max_ttft_ms       REAL,
+    cold_ttft_ms      REAL,
+    api_base          TEXT,
+    num_rounds        INTEGER
+);
+"""
+
+
+def _get_db_connection() -> sqlite3.Connection:
+    """Open SQLite DB and ensure benchmark tables exist."""
+    db_path = Path(DB_PATH)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path), timeout=5.0)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.executescript(_BENCHMARK_INIT_SQL)
+    return conn
+
+
+def db_insert_result(run_id: str, model: str, variant: str, prompt: str,
+                     prompt_number: int, round_number: int, result: dict,
+                     is_cold_start: bool, api_base: str, num_rounds: int,
+                     timeout: int) -> None:
+    """Insert a single benchmark run result. Best-effort."""
+    try:
+        conn = _get_db_connection()
+        try:
+            conn.execute(
+                "INSERT INTO benchmark_results "
+                "(run_id, model, model_variant, prompt, prompt_number, round_number, "
+                "tokens_per_second, ttft_ms, total_ms, token_count, response_text, "
+                "is_cold_start, error, api_base, num_rounds, timeout) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (run_id, model, variant, prompt, prompt_number, round_number,
+                 result.get("tokens_per_second"), result.get("ttft_ms"),
+                 result.get("total_ms"), result.get("token_count"),
+                 result.get("response"), int(is_cold_start),
+                 result.get("error"), api_base, num_rounds, timeout),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log.warning("DB insert failed (result): %s", e)
+
+
+def db_insert_aggregate(run_id: str, model: str, variant: str,
+                        stats: dict, api_base: str, num_rounds: int) -> None:
+    """Insert aggregate stats for a model. Best-effort."""
+    try:
+        conn = _get_db_connection()
+        try:
+            conn.execute(
+                "INSERT INTO benchmark_aggregates "
+                "(run_id, model, model_variant, valid_count, error_count, "
+                "avg_tps, avg_ttft_ms, avg_total_ms, min_ttft_ms, max_ttft_ms, "
+                "cold_ttft_ms, api_base, num_rounds) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (run_id, model, variant,
+                 stats.get("valid"), stats.get("errors"),
+                 stats.get("avg_tps"), stats.get("avg_ttft_ms"),
+                 stats.get("avg_total_ms"), stats.get("min_ttft_ms"),
+                 stats.get("max_ttft_ms"), stats.get("cold_ttft_ms"),
+                 api_base, num_rounds),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log.warning("DB insert failed (aggregate): %s", e)
+
 
 TEST_PROMPTS = [
     "Erklaere mir in zwei Saetzen, warum Bewegung im Alter wichtig ist.",
@@ -155,14 +273,24 @@ def main():
     parser.add_argument("--timeout", type=int, default=120, help="Request timeout in seconds")
     parser.add_argument("--detailed", action="store_true", help="Show per-round metrics")
     parser.add_argument("--json", metavar="FILE", help="Export raw results to JSON file")
+    parser.add_argument("--no-db", action="store_true", help="Skip SQLite logging")
+    parser.add_argument("--variant", default="stock",
+                        help="Model variant tag, e.g. 'stock', 'tuned', 'quantized' (default: stock)")
     args = parser.parse_args()
+
+    setup_logging()
+    run_id = uuid.uuid4().hex[:12]
+    use_db = not args.no_db
 
     total_runs = len(args.models) * len(TEST_PROMPTS) * args.rounds
     print(f"\n  SeniorVoice LLM Benchmark")
     print(f"  Models: {', '.join(args.models)}")
     print(f"  API: {args.api_base}")
+    print(f"  Variant: {args.variant}")
     print(f"  Prompts: {len(TEST_PROMPTS)} x {args.rounds} rounds = {total_runs} total runs")
     print(f"  Mode: Sequential (unload between models)")
+    print(f"  DB: {DB_PATH if use_db else 'disabled (--no-db)'}")
+    print(f"  Run ID: {run_id}")
     print(f"  {'=' * 60}\n")
 
     all_results: dict[str, list[dict]] = {}
@@ -178,6 +306,7 @@ def main():
 
         model_results = []
         error_count = 0
+        run_counter = 0
 
         for i, prompt in enumerate(TEST_PROMPTS):
             for r in range(args.rounds):
@@ -189,6 +318,18 @@ def main():
                     timeout=args.timeout,
                 )
                 model_results.append(result)
+                is_cold = run_counter == 0
+                run_counter += 1
+
+                # DB: insert individual result
+                if use_db:
+                    db_insert_result(
+                        run_id=run_id, model=model, variant=args.variant,
+                        prompt=prompt, prompt_number=i + 1, round_number=r + 1,
+                        result=result, is_cold_start=is_cold,
+                        api_base=args.api_base, num_rounds=args.rounds,
+                        timeout=args.timeout,
+                    )
 
                 if "error" in result:
                     error_count += 1
@@ -209,6 +350,13 @@ def main():
             print(f"  -> {stats['avg_tps']} tok/s, TTFT {stats['avg_ttft_ms']:.0f}ms")
         else:
             print(f"  -> FAILED ({error_count} errors)")
+
+        # DB: insert aggregate stats for this model
+        if use_db:
+            db_insert_aggregate(
+                run_id=run_id, model=model, variant=args.variant,
+                stats=stats, api_base=args.api_base, num_rounds=args.rounds,
+            )
 
         all_results[model] = model_results
 

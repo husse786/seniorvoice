@@ -39,6 +39,9 @@ MEMORY_TIMEOUT = int(os.getenv("MEMORY_TIMEOUT", "300"))      # seconds of inact
 # Long-term Memory (SQLite)
 MEMORY_DB_PATH = os.getenv("MEMORY_DB_PATH", str(Path.home() / "seniorvoice" / "seniorvoice.db"))
 
+# Benchmark DB (defaults to same SQLite DB; override with DB_PATH for separate storage)
+DB_PATH = os.getenv("DB_PATH", MEMORY_DB_PATH)
+
 # PIR Sensor
 PIR_GPIO_PIN = int(os.getenv("PIR_GPIO_PIN", "4"))
 PIR_GPIO_CHIP = int(os.getenv("PIR_GPIO_CHIP", "4"))  # Pi 5 uses gpiochip4
