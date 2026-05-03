@@ -3,6 +3,9 @@
 ZHAW IoT Data Streaming & Analytics · FS 2026
 Team: Yanick · Chris · Sansone · Haris
 
+[![SeniorVoice Präsentation](docs/SeniorVoice_TitleImage.png)](docs/SeniorVoice_Local_AI_for_Seniors.pdf)
+> Klick auf das Bild öffnet die Zwischenstand-Präsentation (W11, 04.05.2026)
+
 ---
 
 ## Inhaltsverzeichnis
@@ -49,7 +52,7 @@ PIR-Sensor → Mikrofon → STT → LLM → TTS → Lautsprecher
 
 ### Zwischenpräsentation
 
-[SeniorVoice_Local_AI_Assistant.pdf](docs/SeniorVoice_Local_AI_Assistant.pdf) — Statusbericht W11 (04.05.2026)
+[SeniorVoice_Local_AI_for_Seniors.pdf](docs/SeniorVoice_Local_AI_for_Seniors.pdf) — Statusbericht W11 (04.05.2026)
 
 ### Pipeline (funktional)
 
