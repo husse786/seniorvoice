@@ -22,6 +22,12 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")  # optional for local Ollama
 LLM_MODEL = os.getenv("LLM_MODEL", "kimi-k2.6")
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))  # seconds; increase for local models
 
+# Multi-backend LLM (fallback chain)
+# "default" = use LLM_API_BASE/KEY/MODEL above
+# "ollama,kimi" = try LLM_OLLAMA_* first, fall back to LLM_KIMI_*
+LLM_BACKENDS = os.getenv("LLM_BACKENDS", "default")
+LLM_STREAM = os.getenv("LLM_STREAM", "false").lower() in ("true", "1", "yes")
+
 # TTS (Piper)
 _default_voice = str(Path.home() / ".local/share/piper-voices/de_DE-thorsten-medium.onnx")
 PIPER_VOICE = os.getenv("PIPER_VOICE", _default_voice)

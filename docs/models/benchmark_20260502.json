@@ -1,0 +1,1114 @@
+{
+  "timestamp": "2026-05-02T23:52:24+0200",
+  "config": {
+    "api_base": "http://localhost:11434/v1",
+    "rounds": 3,
+    "timeout": 120,
+    "prompts": [
+      "Erklaere mir in zwei Saetzen, warum Bewegung im Alter wichtig ist.",
+      "Was kann ich gegen Schlafprobleme tun? Antworte kurz und einfach.",
+      "Erzaehle mir einen kurzen Witz auf Deutsch.",
+      "Ich habe heute Geburtstag. Was koenntest du mir wuenschen?"
+    ]
+  },
+  "models": {
+    "gemma3:4b": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 1.7,
+        "avg_ttft_ms": 2516.0,
+        "avg_total_ms": 22463.0,
+        "min_ttft_ms": 1400.0,
+        "max_ttft_ms": 5148.0,
+        "cold_ttft_ms": 14688.0
+      },
+      "runs": [
+        {
+          "model": "gemma3:4b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hält Ihren Körper fit und gesund, selbst im Alter. Sie hilft Ihnen, aktiv zu bleiben, Ihre Muskeln zu stärken und das Risiko von Krankheiten zu verringern.",
+          "token_count": 39,
+          "ttft_ms": 14687.8,
+          "total_ms": 34411.8,
+          "tokens_per_second": 1.1
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hält Ihren Körper fit und gesund, auch wenn Sie älter werden. Regelmäßige Aktivität hilft, Muskeln, Gelenke und das Herz-Kreislauf-System zu stärken.",
+          "token_count": 42,
+          "ttft_ms": 1424.1,
+          "total_ms": 21718.0,
+          "tokens_per_second": 1.9
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hält Ihren Körper fit und gesund, auch wenn Sie älter werden. Regelmäßige Aktivität hilft, Gelenke geschmeidig zu halten, die Muskeln stark zu machen und die Stimmung zu verbessern.",
+          "token_count": 44,
+          "ttft_ms": 2349.4,
+          "total_ms": 26093.8,
+          "tokens_per_second": 1.7
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Guten Tag! Bei Schlafproblemen hilft oft, eine entspannende Abendroutine zu haben. Regelmäßige Schlafzeiten und eine ruhige Umgebung können ebenfalls sehr hilfreich sein.",
+          "token_count": 35,
+          "ttft_ms": 4615.5,
+          "total_ms": 24143.0,
+          "tokens_per_second": 1.4
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Guten Tag! Versuchen Sie, eine feste Schlafenszeit einzuhalten und vermeiden Sie anregende Aktivitäten vor dem Schlafengehen. Ein warmes Bad oder ein entspannendes Buch können ebenfalls helfen.",
+          "token_count": 43,
+          "ttft_ms": 1877.6,
+          "total_ms": 22954.4,
+          "tokens_per_second": 1.9
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Guten Tag! Regelmäßige Schlafzeiten helfen oft schon sehr. Auch eine entspannende Abendroutine, wie ein warmes Bad, kann Wunder wirken.  Sprechen Sie am besten mit Ihrem Arzt, wenn es nicht besser wird.",
+          "token_count": 47,
+          "ttft_ms": 1775.0,
+          "total_ms": 26897.2,
+          "tokens_per_second": 1.7
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Warum hat die Tomate den Salat verlassen? Weil er keine roten Rosen mehr sah! 😄 \n\nWie hat es Ihnen gefallen?",
+          "token_count": 26,
+          "ttft_ms": 4094.1,
+          "total_ms": 17234.7,
+          "tokens_per_second": 1.5
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Warum hat die Katze Fußball gespielt? Weil sie eine gute Aus-Ball hatte! 😄\n",
+          "token_count": 19,
+          "ttft_ms": 1589.4,
+          "total_ms": 11721.8,
+          "tokens_per_second": 1.6
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar, hier ist ein kleiner Witz:\n\nWarum hat der Vogel keine SMS geschickt? Weil er noch keine Nummer hatte! \n\nIch hoffe, der hat Ihnen ein Lächeln ins Gesicht gebracht. 😊\n",
+          "token_count": 45,
+          "ttft_ms": 1399.7,
+          "total_ms": 26273.8,
+          "tokens_per_second": 1.7
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag, mein lieber Freund! Ich wünsche Ihnen einen wunderschönen Tag voller Freude, schöner Momente und lieber Menschen um sich. Mögen Sie im kommenden Jahr Gesundheit, Glück und alles, was Ihnen wichtig ist, begleiten.",
+          "token_count": 51,
+          "ttft_ms": 5148.0,
+          "total_ms": 31644.6,
+          "tokens_per_second": 1.6
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen einen wunderschönen Tag voller Freude und schöner Momente. Mögen all Ihre Wünsche in Erfüllung gehen!",
+          "token_count": 34,
+          "ttft_ms": 1619.0,
+          "total_ms": 19182.0,
+          "tokens_per_second": 1.8
+        },
+        {
+          "model": "gemma3:4b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen einen wunderschönen Tag voller Freude und schöner Momente. Mögen Sie gesund und glücklich im neuen Lebensjahr sein!",
+          "token_count": 35,
+          "ttft_ms": 1787.8,
+          "total_ms": 19234.3,
+          "tokens_per_second": 1.8
+        }
+      ]
+    },
+    "gemma3:1b": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 3.8,
+        "avg_ttft_ms": 1327.0,
+        "avg_total_ms": 7511.0,
+        "min_ttft_ms": 863.0,
+        "max_ttft_ms": 2146.0,
+        "cold_ttft_ms": 6936.0
+      },
+      "runs": [
+        {
+          "model": "gemma3:1b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Gerne! Bewegung ist wichtig, um fit zu bleiben, die Stimmung zu verbessern und das Leben länger und genauer zu genießen.",
+          "token_count": 26,
+          "ttft_ms": 6935.5,
+          "total_ms": 11730.5,
+          "tokens_per_second": 2.2
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Okay, hier sind zwei Sätze, warum Bewegung wichtig ist, wenn man älter wird:\n\n1.  **Körperliche Gesundheit:** Das Gehen und Dehnen helfen, Verletzungen zu vermeiden und das Muskelgedächtnis zu trainieren.\n2.  **Geistiges Wohlbefinden:** Bewegung steigert die Stimmung und hilft, den Geist fit zu halten.",
+          "token_count": 78,
+          "ttft_ms": 999.1,
+          "total_ms": 16655.7,
+          "tokens_per_second": 4.7
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "1.  **Aktiv bleiben:** Der Körper braucht stillen Input!\n2.  **Gesundheit gut halten:** Ein Leben ohne Bewegung kann gefährlich werden.",
+          "token_count": 35,
+          "ttft_ms": 1008.0,
+          "total_ms": 7402.0,
+          "tokens_per_second": 4.7
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Schlafprobleme können oft durch Schlafhygiene und Entspannung gelöst werden.",
+          "token_count": 17,
+          "ttft_ms": 2146.4,
+          "total_ms": 8101.7,
+          "tokens_per_second": 2.1
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Schlafprobleme können oft durch regelmäßige Schlafzeiten und eine entspannende Schlafumgebung gelindert werden.",
+          "token_count": 24,
+          "ttft_ms": 1438.6,
+          "total_ms": 6365.4,
+          "tokens_per_second": 3.8
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Schlafprobleme können oft durch Stress und weniger Schlaf sein. Versuche Entspannung und ausreichend Schlaf!",
+          "token_count": 21,
+          "ttft_ms": 862.8,
+          "total_ms": 4617.3,
+          "tokens_per_second": 4.5
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar! Hier ist einer:\n\nWarum hat der Lehrer immer seine Augen schrubbelnd? \n\n... Weil er Angst vor der Antwort hat! 😊 \n\nGefällt er dir?",
+          "token_count": 40,
+          "ttft_ms": 1644.0,
+          "total_ms": 10338.6,
+          "tokens_per_second": 3.9
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar! Hier ist einer:\n\nWarum hat der Mathematiker Angst vor der Null?\n\nWeil sie mit Null immer schlecht wird! 😄",
+          "token_count": 28,
+          "ttft_ms": 911.9,
+          "total_ms": 6995.7,
+          "tokens_per_second": 4.0
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar, hier ist einer:\n\nWas ist das Lieblingsgericht der Bananen? \n\n... Ein Eis! 😄",
+          "token_count": 24,
+          "ttft_ms": 972.4,
+          "total_ms": 5947.7,
+          "tokens_per_second": 4.0
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Das ist super! Ich wünsche dir alles Liebe und Gute zum Geburtstag! 🎉",
+          "token_count": 16,
+          "ttft_ms": 1891.8,
+          "total_ms": 5163.0,
+          "tokens_per_second": 3.1
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Das ist toll! Ich wünsche dir ein ganz frohes Geburtstag! Viel Spaß beim Feiern! 🎉",
+          "token_count": 21,
+          "ttft_ms": 1160.5,
+          "total_ms": 6289.8,
+          "tokens_per_second": 3.3
+        },
+        {
+          "model": "gemma3:1b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Das ist wunderbar! Ich wünsche dir von Herzen alles Gute zum Geburtstag! 😊",
+          "token_count": 17,
+          "ttft_ms": 1556.2,
+          "total_ms": 4748.0,
+          "tokens_per_second": 3.6
+        }
+      ]
+    },
+    "llama3.1:8b": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 1.3,
+        "avg_ttft_ms": 2689.0,
+        "avg_total_ms": 59667.0,
+        "min_ttft_ms": 859.0,
+        "max_ttft_ms": 8013.0,
+        "cold_ttft_ms": 34101.0
+      },
+      "runs": [
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung im Alter hilft, das Knochengewebe zu stärken und Muskeln zu erhalten. So verringert sich das Risiko von Stürzen oder Erkrankungen wie Osteoporose.",
+          "token_count": 48,
+          "ttft_ms": 34100.6,
+          "total_ms": 69460.1,
+          "tokens_per_second": 0.7
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hilft dabei, die Muskeln zu stärken und flexibler zu machen. Dadurch wird es leichter, sich täglich frei zu bewegen und keine Sprünge abzuspringen (weniger gefährliche Stürze), was wichtig für die Gesundheit und das Vermeiden von Knochenbrüchen ist.",
+          "token_count": 77,
+          "ttft_ms": 937.7,
+          "total_ms": 60413.6,
+          "tokens_per_second": 1.3
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hilft bei dem Wetter mich besser zu fühlen und das Körper funktioniert auch besser. Außerdem können manchmal Muskeln abnehmen, wenn man nicht genug bewegt sich, sodass es schwieriger wird gehen oder ankommen zu können.",
+          "token_count": 58,
+          "ttft_ms": 1130.2,
+          "total_ms": 43161.0,
+          "tokens_per_second": 1.3
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Wenn du Schwierigkeiten hast, einzuschlafen oder dich schlecht erholt, kannst du folgende Tipps probieren:\n\n*   Geh jeden Abend regelmäßig zum gleichen Zeitpunkt ins Bett.\n*   Mach vor dem Schlafen leichtes Gärtnern, Yoga oder höre entspannende Musik.\n*   Ausschließe das Trinken von Kaffee und Alkohol nach 15 Uhr.",
+          "token_count": 94,
+          "ttft_ms": 8012.9,
+          "total_ms": 83876.3,
+          "tokens_per_second": 1.1
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Gegen Schlafprobleme kannst Du zum Beispiel regelmäßig Sport treiben, um Dich müde zu machen. Ein ruhiger Ort zum Schlafen ist auch wichtig, also stelle sicher, dass es dunkel und still in Deinem Zimmer ist. Eine gute Ruhezeit von 7-9 Stunden pro Nacht hilft ebenfalls, Dich ausgeschlafen zu fühlen.",
+          "token_count": 80,
+          "ttft_ms": 1023.7,
+          "total_ms": 59185.4,
+          "tokens_per_second": 1.4
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Gegen Schlafprobleme kannst du zum Beispiel:\n\n* Deinen Schlafzeitpunkt regeln: Geh zu dir gewohntem Zeitpunkt ins Bett.\n* Eine Ruhezeit vor dem Zubettgehen einsetzen, um dich entspannen zu helfen (z.B. Tee trinken, lesen).\n* Ein kühles Zimmer haben, da deine Körper sollte abkühlen, damit du gut schlafen kannst.\n\nWenn die Probleme anhaltend sind, ist es ratsam einen Arzt aufzusuchen.",
+          "token_count": 113,
+          "ttft_ms": 867.9,
+          "total_ms": 86556.0,
+          "tokens_per_second": 1.3
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Warum hat der Alte eine Katze zum Arzt gebracht?\n\nWeil die Katze ständig nur \"Miau\" sagte! Der Arzt hat gelacht und gesagt: \"Ach, das tut nicht weh, sondern laut sagen!\"",
+          "token_count": 55,
+          "ttft_ms": 6037.6,
+          "total_ms": 47527.3,
+          "tokens_per_second": 1.2
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Warum ging Karl zum Arzt? Weil er Angst davor hatte, an sich selbst zu zerbrechen. (Kurzwar eine humorvolle Verbindung zweier verschiedener Bedeutungen des Wortes \"zerbrechen\".)",
+          "token_count": 52,
+          "ttft_ms": 925.2,
+          "total_ms": 38087.6,
+          "tokens_per_second": 1.4
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Warum hast du keinen Mann? Weil es an deiner Tür keinen Notrufknopf \"Mannsucht\" gibt! Lächeln, Senioren, Sie können auch sagen: Kein Notrufknopf für eine Erwachsenenversion des Freundes-zur-Überraschung-Spiels, man nennt es Freunde oder Partner gewöhnlich.",
+          "token_count": 85,
+          "ttft_ms": 859.2,
+          "total_ms": 61844.8,
+          "tokens_per_second": 1.4
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Happy Birthday! Ich wünsche dir ein unvergessliches Jahr vor dir, gefüllt mit Freude, Gesundheit und alles, was dein Herz begehrt. Ich hoffe, dein Geburtstag ist ein besonderer Tag für dich. Wollen wir gemeinsam deine Lieblingspläne für den restlichen Tag diskutieren?",
+          "token_count": 77,
+          "ttft_ms": 7910.5,
+          "total_ms": 65692.9,
+          "tokens_per_second": 1.2
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche dir eine tolle und unvergessliche Geburtstagsfeier, viel Freude und Spaß am heutigen Tag und auch in den nächsten Jahren. Mögest du gesund und zufrieden bleiben und viele schöne Erinnerungen schaffen!",
+          "token_count": 71,
+          "ttft_ms": 994.6,
+          "total_ms": 52496.4,
+          "tokens_per_second": 1.4
+        },
+        {
+          "model": "llama3.1:8b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Geburtstag herzlichen Glückwunsch! Ich wünsche dir ein besonderes Licht in diesem Jahr, viele Gesichter zu sehen und zu lachen, sowie eine Menge von Freude, Frieden und Harmonie um dich herum. Viel Spaß haben Sie heute mit Familie und Freunden an Ihrem besonderen Tag!",
+          "token_count": 74,
+          "ttft_ms": 883.6,
+          "total_ms": 57496.8,
+          "tokens_per_second": 1.3
+        }
+      ]
+    },
+    "mistral:7b": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 1.3,
+        "avg_ttft_ms": 2339.0,
+        "avg_total_ms": 78138.0,
+        "min_ttft_ms": 653.0,
+        "max_ttft_ms": 7690.0,
+        "cold_ttft_ms": 32418.0
+      },
+      "runs": [
+        {
+          "model": "mistral:7b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": " Bewegung ist im Alter wichtig, da sie den Muskelstarkheit, Flexibilität, Balancieren und Koordination fördert. Durch regelmäßige Bewegung können häufige gesundheitsgefährdende Zustände wie Osteoporose, Diabetes mellitus oder Depressionen verhindert werden.",
+          "token_count": 84,
+          "ttft_ms": 32418.5,
+          "total_ms": 97046.4,
+          "tokens_per_second": 0.9
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": " Bewegung im Alter ist essentiell, denn sie fördert eine gute körperliche Fitness, verhindert Verätzlichkeit, verbessert die Muskelstärke und Kohlendioxidtransport im Blut (HbA1c). Zudem erhöht Bewegung das Gefühl der Selbstbewusstsein, verringert Symptome von Depressionen und verbessert den Schlaf.",
+          "token_count": 102,
+          "ttft_ms": 793.6,
+          "total_ms": 74991.8,
+          "tokens_per_second": 1.4
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": " Bewegung im Alter ist wichtig, weil sie eine wesentliche Rolle für die Gesundheit und Unabhängigkeit spielt. Durch regelmässige körperliche Aktivitäten sorgt man dafür, dass das Muskelskelett kräftig bleibt, der Körpersatz wird verbessert und man eine bessere Balance hat. Eine Bewegung im Alter kann auch dazu führen, die Risiken von Entkrankungen wie Krebs, Herz-Kreislauf-Erkrankungen und Diabetes zu reduzieren. Deshalb ist es wichtig, regelmäßig zu bewegen und auf die individuellen Bedürfnisse und Einschränkungen eines jeden Menschen einzugehen.",
+          "token_count": 176,
+          "ttft_ms": 732.8,
+          "total_ms": 131467.7,
+          "tokens_per_second": 1.3
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": " Gegen Schlafprobleme können folgende Maßnahmen hilfreich sein:\n\n1. Tägliches Ausliegen der Augen (ca. 20 Minuten)\n2. Schaffen Sie ruhige Voraussetzungen für den Schlaf, z.B. dunkles Zimmer und angemessene Körpertemperatur.\n3. Ein regelmäßiges Bett- und Esszeiten habe positive Wirkung auf den Schlaf.",
+          "token_count": 110,
+          "ttft_ms": 7689.6,
+          "total_ms": 90724.9,
+          "tokens_per_second": 1.2
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": " Um Schlafproblematik zu reduzieren, kannst du versuchen, eine regelmäßige Schlaf routine einzuhalten, zum Schlaf gehen zu gehen, und dabei den Raum möglichst dunkel und ruhig zu halten. Längerer Aufenthalt am Tage im Freien und eine gemässigte Kaffeinkonsumption können auch helfen, die Qualität deines Schlaps aufzubessern. Zusätzlich spricht man von „Senior Friendly Sleep Aids\" (Schlafhilfsmittel für Alte), die durch einen Arzt angemessen einsetzbar sind und den Schlaf bei älteren Menschen verbessern können.",
+          "token_count": 162,
+          "ttft_ms": 717.5,
+          "total_ms": 122972.9,
+          "tokens_per_second": 1.3
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": " Um Schlafprobleme zu lindern, könnte man folgende Schritte undernehmen:\n\n1. Regelmäßige bettlägerige Zeiten.\n2. Vermeiden von Stimuli vor Aufenthalten im Bett wie z.Bsp. Elektronik-Geräte.\n3. Ein mögliches Mittel ist der Einsatz von Schlafhilfsmitteln nach Anlaufzeit und Arztberatung, insbesondere bei ähnlich schweren Fällen.",
+          "token_count": 118,
+          "ttft_ms": 868.7,
+          "total_ms": 86195.6,
+          "tokens_per_second": 1.4
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": " Ja, hier ist ein kleiner, scherzhafter Witz für Sie: warum hat der alte Herr den Briefkasten im Winter so leicht entfernen wollen? Weil er ihn aus Kälte nicht losschütteln konnte!",
+          "token_count": 58,
+          "ttft_ms": 4596.7,
+          "total_ms": 45284.1,
+          "tokens_per_second": 1.3
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": " Hier kommt der Witz: Warum flog der Turteltaube nicht hoch? Weil ihm fehlte das Flughimmelchen!\nEs freut mich, Ihnen den Spaß gebracht zu haben.",
+          "token_count": 53,
+          "ttft_ms": 1019.0,
+          "total_ms": 42434.0,
+          "tokens_per_second": 1.2
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": " Hier ist ein bisschen Humor für dich:\n\n1. Was ist beim Alter schlechtestes? Die Zeit fliegt so schnell vorüber wie eine Junge!\n2. Warum geht es alten Männern nie? Denn sie werden nicht vergrüchtert!\n3. Wie verliert ein alter Mann seine Tasche? Er legt sie ab und sagt: \"Ich werde sie hier wiederfinden!\"",
+          "token_count": 103,
+          "ttft_ms": 693.0,
+          "total_ms": 73203.3,
+          "tokens_per_second": 1.4
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": " Glückliche Geburtstagsfeier! Ich wünschte dir viele spaßvolle Momente mit deinen Lieben. Ich hoffe, dass es ein Tag der Freude bleibt. Viel Erfolg und Glück für den kommenden Jahr!",
+          "token_count": 60,
+          "ttft_ms": 7196.1,
+          "total_ms": 49147.3,
+          "tokens_per_second": 1.2
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": " Glückwunsch zu deinem Geburtstag! Ich wünsche dir ein tolles Tag und viel Freude an den Feierlichkeiten! Sicher sind alle Hochgeburtstage eine gute Gelegenheit, mit Freunden und Familienangehörigen Zusammenkommen zu lassen. Wenn du etwas besonderes für dich tun möchtest, könntest du z.B. eine neue Hobby-Aktivität aufnehmen oder gerne essen, was dich besonders gut tut? Viel Spaß und viel Tüchtigkeit!",
+          "token_count": 128,
+          "ttft_ms": 652.8,
+          "total_ms": 93987.5,
+          "tokens_per_second": 1.4
+        },
+        {
+          "model": "mistral:7b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": " Frohe Geburtstag! Ich wünsche dir viel Glück, Gesundheit und viele spaßvolle Momente in den nächsten Lebensjahren. Verachte nicht die kleinen Dinge im Leben und genieße jeden Tag dafur, dass du hier noch bist!",
+          "token_count": 67,
+          "ttft_ms": 774.6,
+          "total_ms": 49107.2,
+          "tokens_per_second": 1.4
+        }
+      ]
+    },
+    "granite4.1:3b": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 2.2,
+        "avg_ttft_ms": 1515.0,
+        "avg_total_ms": 23019.0,
+        "min_ttft_ms": 447.0,
+        "max_ttft_ms": 4416.0,
+        "cold_ttft_ms": 17347.0
+      },
+      "runs": [
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung im Alter hilft, die Gesundheit des Körpers zu erhalten und das Risiko von Krankheiten wie Herz-Kreislauf-Erkrankungen und Osteoporose zu verringern. Sie fördert auch das Wohlbefinden und die kognitive Funktion.",
+          "token_count": 64,
+          "ttft_ms": 17347.2,
+          "total_ms": 43781.2,
+          "tokens_per_second": 1.5
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung im Alter hilft, die Kondition zu erhalten und das Risiko von Herz-Kreislauf-Erkrankungen zu verringern. Sie fördert auch die psychische Gesundheit durch eine Verbesserung des Wohlbefindens und der Lebensqualität.",
+          "token_count": 64,
+          "ttft_ms": 451.5,
+          "total_ms": 26487.5,
+          "tokens_per_second": 2.4
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung im Alter hilft bei der Gesundheit von Herz und Kreislauf sowie beim Erhalt der Knochendichte und Flexibilität. Sie fördert auch das Wohlbefinden und die kognitive Funktion.",
+          "token_count": 50,
+          "ttft_ms": 496.2,
+          "total_ms": 20993.2,
+          "tokens_per_second": 2.4
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Sie können regelmäßige Schlafgewohnheiten einhalten, wie früh ins Bett gehen und zur gleichen Zeit aufstehen. Ein ruhiger Schlafplatz schaffen und geräuschvoller Lärm minimieren. Außerdem hilft Bewegung in der Natur; weniger Koffein und Alkohol tragen ebenfalls dazu bei, dass Sie besser schlafen.",
+          "token_count": 82,
+          "ttft_ms": 4415.7,
+          "total_ms": 43770.3,
+          "tokens_per_second": 1.9
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Sie können versuchen, einen regelmäßigen Schlaf-Wach-Rhythmus zu einhalten, eine ruhige Umgebung zu schaffen, Bildschirmzeit vor dem Schlafengehen zu reduzieren und Entspannungstechniken wie tiefes Atmen oder Meditation zu nutzen.",
+          "token_count": 63,
+          "ttft_ms": 641.5,
+          "total_ms": 27789.3,
+          "tokens_per_second": 2.3
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Du kannst bei Schlafproblemen versuchen, einen regelmäßigen Schlaf-Wach-Rhythmus einzuhalten, eine ruhige Umgebung zu schaffen, Belastende Gedanken am Abend zu vermeiden und gegebenenfalls Entspannungstechniken wie tiefes Atmen oder Meditation zu probieren.",
+          "token_count": 72,
+          "ttft_ms": 735.6,
+          "total_ms": 29536.1,
+          "tokens_per_second": 2.4
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Warum flog der Berg nicht? Weil er bereits ein Gipfel erreicht hatte!",
+          "token_count": 20,
+          "ttft_ms": 3159.8,
+          "total_ms": 11059.4,
+          "tokens_per_second": 1.8
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Warum flog der Affe mit einem Radar? Denn er wollte seinen GPS verbessern!",
+          "token_count": 19,
+          "ttft_ms": 446.9,
+          "total_ms": 8061.0,
+          "tokens_per_second": 2.4
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Warum geht der alte Mann nie spät ins Gesicht? Weil er schon lange draußen sitzt!",
+          "token_count": 24,
+          "ttft_ms": 625.5,
+          "total_ms": 9598.9,
+          "tokens_per_second": 2.5
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zu deinem Geburtstag! Ich würde dir gerne ein Buch oder eine CD mit Melodien, die von der Vergangenheit an dich herüberkommen, schenken. Es ist schön, sich aufs Neue in die Musik des Nachkriegszeitraums vertiefen zu können.",
+          "token_count": 69,
+          "ttft_ms": 4011.4,
+          "total_ms": 39148.8,
+          "tokens_per_second": 1.8
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Lösche gerne einen süßen Kuchen zu dir! Es ist schön, dass Du gefeiert kannst. Viel Spass auf deinem Tag!",
+          "token_count": 32,
+          "ttft_ms": 1193.2,
+          "total_ms": 13899.7,
+          "tokens_per_second": 2.3
+        },
+        {
+          "model": "granite4.1:3b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zu deinem Geburtstag! Ich wünsche dir ein gesundes, frohes und erfülltes Jahr. Möchtest du vielleicht eine besondere Überraschung oder Zeit mit Freunden planen?",
+          "token_count": 54,
+          "ttft_ms": 491.5,
+          "total_ms": 22864.2,
+          "tokens_per_second": 2.4
+        }
+      ]
+    },
+    "gemma3n:e2b": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 2.4,
+        "avg_ttft_ms": 2263.0,
+        "avg_total_ms": 23422.0,
+        "min_ttft_ms": 1304.0,
+        "max_ttft_ms": 4257.0,
+        "cold_ttft_ms": 22968.0
+      },
+      "runs": [
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Guten Tag! Bewegung ist im Alter sehr wichtig, denn sie hilft, Muskeln und Knochen stark zu halten und das Sturzrisiko zu verringern. Außerdem verbessert sie die Stimmung und gibt Ihnen Energie für den Alltag. \n\n",
+          "token_count": 49,
+          "ttft_ms": 22968.4,
+          "total_ms": 42102.9,
+          "tokens_per_second": 1.2
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Herzlichen Dank für Ihre Frage! Bewegung im Alter ist sehr wichtig, um die Muskeln und Knochen zu stärken und das Sturzrisiko zu reduzieren.  Es hilft auch, die körperliche und geistige Gesundheit zu erhalten und das Leben angenehmer zu gestalten. \n\nIch hoffe, das ist verständlich! Haben Sie noch weitere Fragen?",
+          "token_count": 75,
+          "ttft_ms": 1423.3,
+          "total_ms": 28403.9,
+          "tokens_per_second": 2.6
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Guten Tag! Bewegung ist im Alter sehr wichtig, um die Muskeln zu stärken und die Knochen gesund zu halten. Außerdem hilft sie, die Ausdauer zu verbessern und das Wohlbefinden zu steigern. \n\n",
+          "token_count": 46,
+          "ttft_ms": 1482.9,
+          "total_ms": 21100.3,
+          "tokens_per_second": 2.2
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Gern! Schlafprobleme können viele Ursachen haben. Versuchen Sie, vor dem Schlafen eine entspannende Routine zu haben, wie z.B. ein warmes Bad oder ein Buch lesen. Achten Sie auch auf eine regelmäßige Schlafenszeit und vermeiden Sie abends Koffein. \n\nWenn die Probleme anhalten, sprechen Sie bitte mit Ihrem Arzt.",
+          "token_count": 76,
+          "ttft_ms": 4075.7,
+          "total_ms": 30839.3,
+          "tokens_per_second": 2.5
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Gute Frage! Versuche, vor dem Schlafen eine entspannende Routine zu haben, wie ein warmes Bad oder eine Tasse Tee. Achte auch auf einen regelmäßigen Schlaf-Wach-Rhythmus und vermeide Koffein am Abend. \n\nWenn die Probleme anhalten, sprich bitte mit deinem Arzt. Er kann dir helfen, die Ursache zu finden und die beste Lösung zu finden.",
+          "token_count": 86,
+          "ttft_ms": 2237.4,
+          "total_ms": 31780.7,
+          "tokens_per_second": 2.7
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Gute Frage! Versuche, vor dem Schlafen eine entspannende Routine zu haben, zum Beispiel ein warmes Bad oder eine Tasse Kräutertee. Regelmäßige Schlafzeiten und ein dunkles, ruhiges Schlafzimmer helfen auch sehr. \n\nWenn die Probleme bleiben, sprich bitte mit Ihrem Arzt. Er kann Ihnen helfen, die Ursache zu finden und die beste Lösung zu finden.",
+          "token_count": 81,
+          "ttft_ms": 1632.1,
+          "total_ms": 30219.6,
+          "tokens_per_second": 2.7
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar! Hier ist ein kleiner Witz:\n\nWarum können Geister so schlecht lügen? Weil man sie immer durchschaut! 😉\n\nIch hoffe, er hat Ihnen ein Lächeln ins Gesicht gezaubert. Wenn Sie möchten, kann ich Ihnen noch einen erzählen! 😊\n",
+          "token_count": 59,
+          "ttft_ms": 3039.4,
+          "total_ms": 28081.8,
+          "tokens_per_second": 2.1
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar! Hier ist ein kurzer Witz:\n\nWarum hat der Computer keine Freunde? \nWeil er zu viele Probleme hat! 😉\n\nIch hoffe, er hat dir gefallen! Möchtest du noch einen hören? 😊",
+          "token_count": 46,
+          "ttft_ms": 1855.5,
+          "total_ms": 19506.0,
+          "tokens_per_second": 2.4
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar, hier ist ein kleiner Witz:\n\nWarum können Mathematiker so gut im Garten sein? Weil sie wissen, wie man mit Pflanzen rechnet! 😉\n\nIch hoffe, er hat dir ein Lächeln ins Gesicht gezaubert. 😊 Gibt es noch etwas, womit ich dir helfen kann?",
+          "token_count": 63,
+          "ttft_ms": 1303.8,
+          "total_ms": 24283.1,
+          "tokens_per_second": 2.6
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche dir einen wunderschönen Tag voller Freude, Glück und schöner Momente. Genieß deinen besonderen Tag! 😊",
+          "token_count": 31,
+          "ttft_ms": 4257.3,
+          "total_ms": 15430.0,
+          "tokens_per_second": 2.0
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen einen wunderschönen Tag voller Freude, Glück und Gesundheit. Genießen Sie diesen besonderen Tag! 😊",
+          "token_count": 29,
+          "ttft_ms": 1625.9,
+          "total_ms": 12983.9,
+          "tokens_per_second": 2.2
+        },
+        {
+          "model": "gemma3n:e2b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche dir einen wunderschönen Tag voller Freude, Glück und lieben Menschen. Mögen all deine Wünsche in Erfüllung gehen! 😊",
+          "token_count": 35,
+          "ttft_ms": 1963.8,
+          "total_ms": 15017.3,
+          "tokens_per_second": 2.3
+        }
+      ]
+    },
+    "gemma3n:e4b": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 1.7,
+        "avg_ttft_ms": 3037.0,
+        "avg_total_ms": 29137.0,
+        "min_ttft_ms": 1664.0,
+        "max_ttft_ms": 6885.0,
+        "cold_ttft_ms": 37184.0
+      },
+      "runs": [
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Hallo! Bewegung hält dich fit und stärkt deine Muskeln und Knochen. Das hilft dir, selbstständiger zu bleiben und das Leben in vollen Zügen zu genießen. \n\n",
+          "token_count": 38,
+          "ttft_ms": 37184.3,
+          "total_ms": 57457.5,
+          "tokens_per_second": 0.7
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Gute Bewegung hält Körper und Geist fit. Sie stärkt Muskeln und Knochen, hilft bei Gleichgewicht und beugt Krankheiten vor, damit Sie länger selbstständig bleiben können. \n",
+          "token_count": 40,
+          "ttft_ms": 1814.1,
+          "total_ms": 23394.6,
+          "tokens_per_second": 1.7
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Gute Bewegung hält den Körper fit und stärkt Muskeln und Knochen. Das hilft, das Gleichgewicht zu verbessern, Stürze zu vermeiden und die Lebensqualität im Alter zu erhalten. \n",
+          "token_count": 41,
+          "ttft_ms": 2065.2,
+          "total_ms": 24154.1,
+          "tokens_per_second": 1.7
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Guten Tag! Schlafprobleme sind sehr unangenehm. Versuchen Sie, eine regelmäßige Schlafroutine zu entwickeln, und schaffen Sie eine angenehme Schlafumgebung. Vermeiden Sie vor dem Schlafengehen Koffein und Alkohol. \n",
+          "token_count": 50,
+          "ttft_ms": 6884.7,
+          "total_ms": 33900.8,
+          "tokens_per_second": 1.5
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Guten Tag! Schlafprobleme sind sehr unangenehm. Versuchen Sie, einen regelmäßigen Schlafrhythmus zu finden und schaffen Sie eine entspannende Schlafumgebung. Vermeiden Sie vor dem Schlafengehen Koffein und Alkohol. \n\nWenn die Probleme anhalten, sprechen Sie bitte mit Ihrem Arzt.",
+          "token_count": 67,
+          "ttft_ms": 1900.9,
+          "total_ms": 39923.6,
+          "tokens_per_second": 1.7
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Guten Tag! Schlafprobleme sind sehr unangenehm. Versuchen Sie, eine regelmäßige Schlafroutine zu entwickeln, gehen Sie jeden Tag zur gleichen Zeit ins Bett und stehen Sie auf. Achten Sie auf eine entspannende Umgebung und vermeiden Sie vor dem Schlafengehen Koffein und Bildschirmzeit. \n\nWenn die Probleme anhalten, sprechen Sie bitte mit Ihrem Arzt.",
+          "token_count": 77,
+          "ttft_ms": 1682.5,
+          "total_ms": 40312.3,
+          "tokens_per_second": 1.9
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar! Was ist grün und rennt durch den Garten? Ein Rasenflitzer! \n\nIch hoffe, der hat dir ein Schmunzeln ins Gesicht gezaubert. Wenn du noch einen hören möchtest, sag einfach Bescheid! 😊\n",
+          "token_count": 54,
+          "ttft_ms": 5271.4,
+          "total_ms": 34459.0,
+          "tokens_per_second": 1.6
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar! Was ist grün und rennt durch den Garten? Ein Rasen-Springer! \n\nIch hoffe, der hat dich zum Schmunzeln gebracht. Wenn du noch einen hören möchtest, sag einfach Bescheid! 😊\n",
+          "token_count": 50,
+          "ttft_ms": 1847.6,
+          "total_ms": 31885.4,
+          "tokens_per_second": 1.6
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Na klar! Was ist grün und rennt durch den Garten? Ein Rasen-Springer! \n\nIch hoffe, der hat dir ein Lächeln ins Gesicht gezaubert. 😊\n",
+          "token_count": 39,
+          "ttft_ms": 2069.3,
+          "total_ms": 21493.4,
+          "tokens_per_second": 1.8
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche dir einen wunderschönen Tag im Kreise deiner Lieben. Mögen Gesundheit, Glück und Zufriedenheit dich im neuen Lebensjahr begleiten. \n",
+          "token_count": 39,
+          "ttft_ms": 6480.4,
+          "total_ms": 26548.3,
+          "tokens_per_second": 1.5
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche dir einen wunderschönen Tag im Kreise deiner Lieben, voller Freude und Glück. Genieß den Tag und lass dich feiern! 😊\n",
+          "token_count": 36,
+          "ttft_ms": 1725.1,
+          "total_ms": 22630.8,
+          "tokens_per_second": 1.6
+        },
+        {
+          "model": "gemma3n:e4b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche dir einen wunderschönen Tag voller Freude, Gesundheit und schöner Momente im Kreise deiner Lieben. Lass dich feiern und genieße den Tag! 😊\n",
+          "token_count": 40,
+          "ttft_ms": 1664.5,
+          "total_ms": 21809.6,
+          "tokens_per_second": 1.8
+        }
+      ]
+    },
+    "gemma4:e2b": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 0.5,
+        "avg_ttft_ms": 81933.0,
+        "avg_total_ms": 97395.0,
+        "min_ttft_ms": 66593.0,
+        "max_ttft_ms": 98597.0,
+        "cold_ttft_ms": 100741.0
+      },
+      "runs": [
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung im Alter ist wichtig, um Muskeln zu erhalten, die Balance zu verbessern und das Sturzrisiko zu verringern. Sie hilft zudem, die körperliche und geistige Gesundheit zu fördern und die Lebensqualität zu steigern.",
+          "token_count": 50,
+          "ttft_ms": 100741.0,
+          "total_ms": 118167.5,
+          "tokens_per_second": 0.4
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung im Alter hilft, die Muskelkraft und Knochendichte zu erhalten, was Stürzen und gesundheitlichen Problemen vorbeugt. Zudem fördert sie die geistige Klarheit und die Stimmung, wodurch die Lebensqualität deutlich verbessert wird.",
+          "token_count": 53,
+          "ttft_ms": 93000.9,
+          "total_ms": 110485.1,
+          "tokens_per_second": 0.5
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung im Alter ist wichtig, um Muskeln und Knochen stark zu halten und das Gleichgewicht zu verbessern, was das Risiko von Stürzen verringert. Sie fördert außerdem die Beweglichkeit und trägt zu einer besseren Stimmung und geistigen Gesundheit bei.",
+          "token_count": 55,
+          "ttft_ms": 77490.3,
+          "total_ms": 93891.8,
+          "tokens_per_second": 0.6
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Versuchen Sie, feste Schlafenszeiten einzuhalten und ein ruhiges Schlafzimmer zu schaffen. Vermeiden Sie Koffein und Bildschirme vor dem Schlafengehen. Regelmäßige Routinen helfen, Ihre Schlafqualität zu verbessern.",
+          "token_count": 47,
+          "ttft_ms": 70784.5,
+          "total_ms": 91527.3,
+          "tokens_per_second": 0.5
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Versuchen Sie, eine feste Schlafenszeit einzuhalten und ein ruhiges Schlafzimmer zu schaffen. Vermeiden Sie Koffein und Bildschirme vor dem Schlafengehen. Regelmäßige, entspannende Rituale können helfen, besser einzuschlafen.",
+          "token_count": 52,
+          "ttft_ms": 83356.9,
+          "total_ms": 100872.1,
+          "tokens_per_second": 0.5
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Versuchen Sie, eine feste Schlafroutine einzuhalten und das Schlafzimmer dunkel und ruhig zu halten. Vermeiden Sie Koffein und schwere Mahlzeiten vor dem Schlafengehen. Entspannende Rituale, wie Lesen, können Ihnen helfen, besser zur Ruhe zu kommen.",
+          "token_count": 57,
+          "ttft_ms": 83636.7,
+          "total_ms": 100440.4,
+          "tokens_per_second": 0.6
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Gerne erzähle ich Ihnen einen kleinen Witz.\n\nWarum hat die Banane die Milch gestohlen? Weil sie sie \"bananen\" wollte! Ich hoffe, dieser Witz hat Ihnen ein kleines Lächeln ins Gesicht gezaubert.",
+          "token_count": 52,
+          "ttft_ms": 88433.5,
+          "total_ms": 104683.5,
+          "tokens_per_second": 0.5
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Gerne erzähle ich Ihnen einen kleinen Witz.\n\nWarum hat der Fisch eine Brille? Weil er nicht sehen konnte! Ich hoffe, er hat Ihnen ein kleines Lächeln ins Gesicht gezaubert.",
+          "token_count": 44,
+          "ttft_ms": 98597.4,
+          "total_ms": 112450.2,
+          "tokens_per_second": 0.4
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Gerne erzähle ich einen kleinen Witz.\n\nWarum hat der Koch eine Leiter benutzt? Weil er die besten Zutaten oben auf dem Regal hatte!",
+          "token_count": 32,
+          "ttft_ms": 74368.3,
+          "total_ms": 83232.1,
+          "tokens_per_second": 0.4
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen einen wundervollen Tag voller Freude, guter Gesundheit und viel Glück für das neue Lebensjahr. Genießen Sie die Feier!",
+          "token_count": 36,
+          "ttft_ms": 90073.0,
+          "total_ms": 106267.5,
+          "tokens_per_second": 0.3
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen alles erdenklich Gute, viel Gesundheit und dass Sie einen wunderschönen Tag verbringen. Mögen all Ihre Wünsche in Erfüllung gehen.",
+          "token_count": 40,
+          "ttft_ms": 74931.4,
+          "total_ms": 87682.5,
+          "tokens_per_second": 0.5
+        },
+        {
+          "model": "gemma4:e2b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen alles erdenklich Gute, viel Freude und vor allem beste Gesundheit für das neue Lebensjahr. Möge dieser Tag wunderschön gefeiert werden!",
+          "token_count": 40,
+          "ttft_ms": 66593.0,
+          "total_ms": 79817.0,
+          "tokens_per_second": 0.5
+        }
+      ]
+    },
+    "gemma4:e4b": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 0.3,
+        "avg_ttft_ms": 174912.0,
+        "avg_total_ms": 213150.0,
+        "min_ttft_ms": 99582.0,
+        "max_ttft_ms": 220948.0,
+        "cold_ttft_ms": 141521.0
+      },
+      "runs": [
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hält Ihren Körper fit und stärkt Ihre Muskeln, was hilft, Stürzen vorzubeugen und die Geschicklichkeit zu erhalten. Außerdem ist Bewegung gut für die Stimmung und hilft Ihnen, geistig aktiv und voller Energie zu bleiben.",
+          "token_count": 52,
+          "ttft_ms": 141521.4,
+          "total_ms": 169676.8,
+          "tokens_per_second": 0.3
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hält Ihren Körper aktiv und stärkt damit Ihre Muskulatur und Knochen. Das ist sehr wichtig, damit Sie möglichst lange selbstständig bleiben und Ihr Alltagsleben genießen können. Regelmäßige Bewegung ist außerdem ein wunderbarer Stimmungsaufheller für Körper und Geist.",
+          "token_count": 58,
+          "ttft_ms": 116410.2,
+          "total_ms": 148198.9,
+          "tokens_per_second": 0.4
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Liebe/r Dame/Herr, Bewegung hält unseren Körper fit und stärkt unsere Muskulatur, was so wichtig ist, dass Sie sturzprävention helfen kann. Zudem fördert Sport nicht nur das körperliche Wohlbefinden, sondern auch die geistige Aktivität und macht uns neugierig und vital.",
+          "token_count": 65,
+          "ttft_ms": 114968.1,
+          "total_ms": 153119.8,
+          "tokens_per_second": 0.4
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Liebe/r Nutzer/in, bitte versuchen Sie, jeden Tag etwa zur gleichen Zeit ins Bett zu gehen und aufzustehen. Vermeiden Sie abends Bildschirme wie Tablets oder Fernseher, da das blaue Licht den Schlaf stören kann. Ein gemütlicher Abend mit einem Buch oder einem warmen Tee hilft oft, den Körper auf Ruhe einzustimmen.",
+          "token_count": 77,
+          "ttft_ms": 136971.3,
+          "total_ms": 179844.9,
+          "tokens_per_second": 0.4
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Das ist ein Thema, das viele kennen. Versuchen Sie, jeden Tag ungefähr zur gleichen Zeit ins Bett zu gehen und aufzustehen. Am Abend hilft es, elektronische Geräte wegzulegen und etwas Entspannendes zu tun, wie zum Beispiel ein Buch lesen oder sanft Musik hören. Wenn die Schlafprobleme anhalten, ist es aber immer gut, einmal mit Ihrem Hausarzt zu sprechen.",
+          "token_count": 83,
+          "ttft_ms": 216538.9,
+          "total_ms": 264283.7,
+          "tokens_per_second": 0.3
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Das ist ein häufiges Problem, und es gibt ein paar Dinge, die sehr hilfreich sein können. Versuchen Sie, möglichst jeden Tag zur gleichen Zeit ins Bett zu gehen und aufzustehen – auch am Wochenende. Machen Sie vor dem Schlafengehen eine beruhigende Routine, wie ein Buch lesen oder sanft Musik hören, und vermeiden Sie Bildschirme.",
+          "token_count": 76,
+          "ttft_ms": 213325.2,
+          "total_ms": 263220.1,
+          "tokens_per_second": 0.3
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Ach, natürlich! Hier ist ein kleiner Witz, der bestimmt gut bei Laune ist.\n\nWas ist mit dem Zahnarzt so lustig? Weil er ständig \"Zahn\"-schnitte macht, aber keiner von ihnen zusammengehalten wird. 😄\n\nIch hoffe, das hat Ihnen ein kleines Lächeln ins Gesicht gezaubert! Haben Sie noch einen schönen Tag.",
+          "token_count": 78,
+          "ttft_ms": 220947.6,
+          "total_ms": 263887.9,
+          "tokens_per_second": 0.3
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Gerne, hier ist etwas, das hoffentlich ein Schmunzeln auf Ihr Gesicht zaubert.\n\nWas ist grün und rennt durch den Garten? Ein Gemüse! 😉\n\nMachen Sie es gut und ich wünsche Ihnen einen schönen Tag!",
+          "token_count": 51,
+          "ttft_ms": 217803.4,
+          "total_ms": 247282.1,
+          "tokens_per_second": 0.2
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Sehr gerne, ich habe einen kleinen Witz für Sie. 😄\n\nTreffen sich zwei Äpfel: \"Mist, mir ist ein bisschen langweilig!\" sagt einer zum anderen. Der andere antwortet dann: \"Mach dir nichts aus den Haaren, wir planen doch nur das nächste Picknick!\"\n\nIch hoffe, er hat Ihnen ein kleines Lächeln ins Gesicht gezaubert! 😊",
+          "token_count": 81,
+          "ttft_ms": 220222.8,
+          "total_ms": 269603.7,
+          "tokens_per_second": 0.3
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zu Ihrem Geburtstag! Ich wünsche Ihnen einen wunderschönen und festlichen Tag voller Freude und Liebe. Genießen Sie diesen besonderen Tag in vollen Zügen und sind Sie gesegnet mit einem wunderbaren neuen Lebensjahr.",
+          "token_count": 48,
+          "ttft_ms": 99582.2,
+          "total_ms": 130883.9,
+          "tokens_per_second": 0.4
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen einen wundervollen Tag, der nur Freude und schöne Momente bringt. Genießen Sie diesen besonderen Tag in vollen Zügen und vor allem: Bleiben Sie gesund und munter!",
+          "token_count": 48,
+          "ttft_ms": 194783.8,
+          "total_ms": 223296.3,
+          "tokens_per_second": 0.2
+        },
+        {
+          "model": "gemma4:e4b",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zu Ihrem Geburtstag! Ich wünsche Ihnen von Herzen nur das Allerbeste und ein wunderschönes neues Lebensjahr. Bleiben Sie gesund, und genießen Sie diesen besonderen Tag in vollen Zügen mit all Ihren Lieben!",
+          "token_count": 47,
+          "ttft_ms": 172473.0,
+          "total_ms": 201030.1,
+          "tokens_per_second": 0.2
+        }
+      ]
+    }
+  }
+}

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""SeniorVoice MVP Pipeline: PIR -> Record -> STT -> Moonshot LLM -> TTS -> Speaker."""
+"""SeniorVoice MVP Pipeline: PIR -> Record -> STT -> LLM (Ollama/Kimi) -> TTS -> Speaker."""
 
 import sys
 import time
 import argparse
 
 from logging_config import setup_logging, get_logger
-from config import MEMORY_TIMEOUT
+from config import MEMORY_TIMEOUT, LLM_STREAM
 from memory import (
     load_facts, format_facts_for_prompt, extract_facts_async,
     extract_and_store_facts, retry_pending_extractions,
@@ -54,7 +54,7 @@ def run_pipeline(
     """
     from audio_capture import record_until_silence
     from stt import transcribe
-    from llm_client import chat
+    from llm_client import chat, chat_streaming
     from tts import speak
 
     trigger_type = "pir" if use_pir else "keyboard"
@@ -100,21 +100,28 @@ def run_pipeline(
         pre_reset_history = list(history)  # snapshot for fact extraction
         history = []
 
-    # Step 4: Get LLM response
+    # Step 4: Get LLM response (+ Step 5 if streaming)
     play_sound("thinking")
     log.info("Thinking...")
     t_llm = time.perf_counter()
-    response, history = chat(cleaned_text, history, facts_block=facts_block)
-    llm_ms = int((time.perf_counter() - t_llm) * 1000)
+
+    if LLM_STREAM:
+        # Streaming: TTS happens per-sentence inside chat_streaming
+        response, history = chat_streaming(cleaned_text, history, facts_block=facts_block)
+        llm_ms = int((time.perf_counter() - t_llm) * 1000)
+        tts_ms = 0  # included in llm_ms for streaming mode
+    else:
+        response, history = chat(cleaned_text, history, facts_block=facts_block)
+        llm_ms = int((time.perf_counter() - t_llm) * 1000)
+
+        # Step 5: Speak the response (non-streaming)
+        log.info("Speaking...")
+        t_tts = time.perf_counter()
+        speak(response)
+        tts_ms = int((time.perf_counter() - t_tts) * 1000)
 
     response_text = response
     log.info("Response: %s", response)
-
-    # Step 5: Speak the response
-    log.info("Speaking...")
-    t_tts = time.perf_counter()
-    speak(response)
-    tts_ms = int((time.perf_counter() - t_tts) * 1000)
 
     total_ms = int((time.perf_counter() - t_start) * 1000)
     log.info("Interaction complete (stt=%dms, llm=%dms, tts=%dms, total=%dms)",

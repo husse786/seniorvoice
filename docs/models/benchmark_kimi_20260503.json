@@ -1,0 +1,138 @@
+{
+  "timestamp": "2026-05-03T00:15:21+0200",
+  "config": {
+    "api_base": "https://api.moonshot.ai/v1",
+    "rounds": 3,
+    "timeout": 120,
+    "prompts": [
+      "Erklaere mir in zwei Saetzen, warum Bewegung im Alter wichtig ist.",
+      "Was kann ich gegen Schlafprobleme tun? Antworte kurz und einfach.",
+      "Erzaehle mir einen kurzen Witz auf Deutsch.",
+      "Ich habe heute Geburtstag. Was koenntest du mir wuenschen?"
+    ]
+  },
+  "models": {
+    "kimi-k2.6": {
+      "stats": {
+        "valid": 12,
+        "errors": 0,
+        "avg_tps": 6.0,
+        "avg_ttft_ms": 11719.0,
+        "avg_total_ms": 13232.0,
+        "min_ttft_ms": 5489.0,
+        "max_ttft_ms": 32679.0,
+        "cold_ttft_ms": 8297.0
+      },
+      "runs": [
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hält Ihren Körper fit, stärkt Muskeln und Gelenke und hilft, Stürze zu vermeiden. Sie tut auch dem Herzen gut und hebt die Stimmung, damit Sie länger selbstständig bleiben.",
+          "token_count": 65,
+          "ttft_ms": 8297.4,
+          "total_ms": 10097.7,
+          "tokens_per_second": 6.4
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hält Ihre Muskeln und Gelenke geschmeidig, stärkt das Herz und hilft, Stürze zu vermeiden. Zudem tut sie dem Kopf gut, fördert die gute Laune und hilft Ihnen, im Alltag selbstständig zu bleiben.",
+          "token_count": 75,
+          "ttft_ms": 8709.1,
+          "total_ms": 10092.4,
+          "tokens_per_second": 7.4
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Erklaere mir in zwei Saetzen, warum Bewegung im Al",
+          "response": "Bewegung hält Ihre Muskeln und Knochen stark, verbessert die Balance und schützt so vor Stürzen. Zudem stärkt sie Herz und Kreislauf und hilft Ihnen, lange fit und selbstständig zu bleiben.",
+          "token_count": 64,
+          "ttft_ms": 8441.9,
+          "total_ms": 10105.0,
+          "tokens_per_second": 6.3
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Versuchen Sie, jeden Tag zur gleichen Zeit ins Bett zu gehen und aufzustehen. Vermeiden Sie abends Kaffee und schwere Mahlzeiten, und sorgen Sie für einen ruhigen, dunklen Schlafraum. Wenn die Probleme lange anhalten, sollten Sie mit Ihrem Arzt sprechen.",
+          "token_count": 82,
+          "ttft_ms": 9341.0,
+          "total_ms": 11408.8,
+          "tokens_per_second": 7.2
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Versuchen Sie, jeden Tag zur gleichen Zeit ins Bett zu gehen und aufzustehen. Vor dem Schlafen können Sie sich entspannen, zum Beispiel mit einem Buch oder leiser Musik, und sollten abends keinen Kaffee mehr trinken. Wenn die Probleme länger bleiben, sprechen Sie bitte mit Ihrem Arzt.",
+          "token_count": 88,
+          "ttft_ms": 11593.7,
+          "total_ms": 13820.1,
+          "tokens_per_second": 6.4
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Was kann ich gegen Schlafprobleme tun? Antworte ku",
+          "response": "Versuchen Sie, jeden Tag zur gleichen Zeit ins Bett zu gehen und aufzustehen. Vermeiden Sie am Abend Kaffee, schweres Essen und helles Licht vom Fernseher. Wenn die Probleme länger anhalten, sprechen Sie mit Ihrem Arzt.",
+          "token_count": 71,
+          "ttft_ms": 10341.4,
+          "total_ms": 12073.4,
+          "tokens_per_second": 5.9
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Warum können Geister so schlecht lügen? Weil man durch sie hindurchsehen kann! Ich hoffe, der hat Sie zum Schmunzeln gebracht.",
+          "token_count": 41,
+          "ttft_ms": 7655.7,
+          "total_ms": 8462.8,
+          "tokens_per_second": 4.8
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Ein Opa fragt seine Frau: „Wo sind meine Schlüssel?“ Sie lacht: „In deiner Hand!“ „Ach ja“, sagt er, „dann suche ich ja nur noch meine Brille.“",
+          "token_count": 51,
+          "ttft_ms": 32679.3,
+          "total_ms": 33750.0,
+          "tokens_per_second": 1.5
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Erzaehle mir einen kurzen Witz auf Deutsch.",
+          "response": "Sagt der eine Rentner zum anderen: „Mein Gedächtnis ist wie ein Elefant.“ Fragt der andere: „Wie meinst du das?“ Er: „Ich vergess immer, wo ich ihn hingelegt habe.“",
+          "token_count": 56,
+          "ttft_ms": 18458.7,
+          "total_ms": 19616.0,
+          "tokens_per_second": 2.9
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen einen wunderschönen Tag voller Freude und lieber Menschen. Genießen Sie Ihren Ehrentag in Ruhe und mit allem, was Ihnen guttut.",
+          "token_count": 63,
+          "ttft_ms": 5591.7,
+          "total_ms": 7109.9,
+          "tokens_per_second": 8.9
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen einen wunderschönen Tag mit viel Freude, Gesundheit und lieben Menschen an Ihrer Seite. Genießen Sie Ihren Ehrentag in Ruhe!",
+          "token_count": 62,
+          "ttft_ms": 10602.7,
+          "total_ms": 12094.9,
+          "tokens_per_second": 5.1
+        },
+        {
+          "model": "kimi-k2.6",
+          "prompt": "Ich habe heute Geburtstag. Was koenntest du mir wu",
+          "response": "Herzlichen Glückwunsch zum Geburtstag! Ich wünsche Ihnen einen wunderschönen Tag voller Freude, Gesundheit und lieber Menschen an Ihrer Seite. Mögen all Ihre Wünsche in Erfüllung gehen!",
+          "token_count": 65,
+          "ttft_ms": 5488.6,
+          "total_ms": 7023.0,
+          "tokens_per_second": 9.3
+        }
+      ]
+    }
+  }
+}

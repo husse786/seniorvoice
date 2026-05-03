@@ -4,11 +4,10 @@ import json
 import sqlite3
 import threading
 import time
-import urllib.request
-import urllib.error
 from pathlib import Path
 
-from config import MEMORY_DB_PATH, LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_TIMEOUT
+from config import MEMORY_DB_PATH, LLM_TIMEOUT
+from llm_backend import complete as llm_complete
 from logging_config import get_logger
 
 log = get_logger("memory")
@@ -144,22 +143,8 @@ def format_facts_for_prompt(facts: list[dict]) -> str:
 
 
 def _call_llm_for_extraction(messages: list[dict]) -> str:
-    """Raw LLM call for fact extraction."""
-    url = f"{LLM_API_BASE}/chat/completions"
-    payload = {
-        "model": LLM_MODEL,
-        "messages": messages,
-        "stream": False,
-    }
-    headers = {"Content-Type": "application/json"}
-    if LLM_API_KEY:
-        headers["Authorization"] = f"Bearer {LLM_API_KEY}"
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-
-    with urllib.request.urlopen(req, timeout=LLM_TIMEOUT * 2) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-        return data["choices"][0]["message"]["content"]
+    """Raw LLM call for fact extraction via shared backend (with fallback)."""
+    return llm_complete(messages, timeout_override=LLM_TIMEOUT * 2)
 
 
 def _parse_facts_json(raw: str) -> list[dict]:
