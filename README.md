@@ -10,13 +10,49 @@ Team: Yanick · Teammitglied 3 · Teammitglied 1 · Teammitglied 2
 
 ## Inhaltsverzeichnis
 
+- [Repo-Struktur](#repo-struktur)
 - [Was ist SeniorVoice?](#was-ist-seniorvoice)
 - [Aktueller Stand](#aktueller-stand)
 - [Hardware](#hardware)
 - [Für neue Teammitglieder](#für-neue-teammitglieder)
-- [Repo-Struktur](#repo-struktur)
 
 > **Abschlussdokumentation:** [`docs/Projektdokumentation.md`](docs/Projektdokumentation.md) — konsolidierte Zusammenfassung (Architektur, Benchmark-Ergebnisse, Lessons Learned, Kosten). Detaillierte Logs aller Sessions: [`docs/logs/`](docs/logs/)
+
+---
+
+## Repo-Struktur
+
+```
+seniorvoice/
+├── pipeline/                    # MVP Code (aktiv, end-to-end funktional)
+│   ├── main.py                  # Orchestrator
+│   ├── audio_capture.py         # Mic-Aufnahme + Silence-Detection
+│   ├── stt.py                   # faster-whisper Transkription
+│   ├── llm_client.py            # Chat-Interface (streaming + non-streaming)
+│   ├── llm_backend.py           # LLM-Abstraktionsschicht (Fallback-Chain)
+│   ├── tts.py                   # Piper TTS + Playback
+│   ├── memory.py                # Long-Term Memory (SQLite)
+│   ├── sensor.py                # PIR GPIO4
+│   ├── sounds.py                # Audio-Feedback Chimes
+│   ├── config.py                # Env-Var Konfiguration
+│   ├── logging_config.py        # Structured Logging
+│   ├── interaction_log.py       # SQLite Interaction Logger
+│   ├── benchmark_models.py      # LLM-Benchmark CLI-Tool
+│   └── requirements.txt
+├── services/                    # Microservice-Skeletons (inaktiv)
+│   ├── stt-service/
+│   ├── llm-service/
+│   ├── action-service/
+│   ├── tts-service/
+│   └── logger-dashboard/
+├── docs/
+│   ├── models/                  # Benchmark-Ergebnisse + JSON-Rohdaten
+│   ├── logs/                    # Arbeitsprotokolle pro Session
+│   ├── hardware/                # Datenblätter (PDF)
+│   └── projektantrag.md         # Projektantrag
+├── CONTEXT.md                   # Aktueller Projektstand
+└── CLAUDE.md                    # Coding-Regeln für Claude Code
+```
 
 ---
 
@@ -221,42 +257,6 @@ python main.py --no-pir --once
 | `docs/projektantrag.md` | Vollständiger Projektantrag (Scope, Timeline) |
 | `docs/models/model_comparisson.md` | LLM-Benchmark-Ergebnisse |
 | `docs/hardware/Hardware-Beschaffung.pdf` | Hardware-Kostenübersicht (CHF 895.42) |
-
----
-
-## Repo-Struktur
-
-```
-seniorvoice/
-├── pipeline/                    # MVP Code (aktiv, end-to-end funktional)
-│   ├── main.py                  # Orchestrator
-│   ├── audio_capture.py         # Mic-Aufnahme + Silence-Detection
-│   ├── stt.py                   # faster-whisper Transkription
-│   ├── llm_client.py            # Chat-Interface (streaming + non-streaming)
-│   ├── llm_backend.py           # LLM-Abstraktionsschicht (Fallback-Chain)
-│   ├── tts.py                   # Piper TTS + Playback
-│   ├── memory.py                # Long-Term Memory (SQLite)
-│   ├── sensor.py                # PIR GPIO4
-│   ├── sounds.py                # Audio-Feedback Chimes
-│   ├── config.py                # Env-Var Konfiguration
-│   ├── logging_config.py        # Structured Logging
-│   ├── interaction_log.py       # SQLite Interaction Logger
-│   ├── benchmark_models.py      # LLM-Benchmark CLI-Tool
-│   └── requirements.txt
-├── services/                    # Microservice-Skeletons (inaktiv)
-│   ├── stt-service/
-│   ├── llm-service/
-│   ├── action-service/
-│   ├── tts-service/
-│   └── logger-dashboard/
-├── docs/
-│   ├── models/                  # Benchmark-Ergebnisse + JSON-Rohdaten
-│   ├── logs/                    # Arbeitsprotokolle pro Session
-│   ├── hardware/                # Datenblätter (PDF)
-│   └── projektantrag.md         # Projektantrag
-├── CONTEXT.md                   # Aktueller Projektstand
-└── CLAUDE.md                    # Coding-Regeln für Claude Code
-```
 
 ---
 
