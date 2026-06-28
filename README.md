@@ -1,7 +1,7 @@
 # SeniorVoice
 **Lokaler KI-Sprachassistent für ältere Personen**
 ZHAW IoT Data Streaming & Analytics · FS 2026
-Team: Yanick · Teammitglied 3 · Teammitglied 1 · Teammitglied 2
+Team: Yanick · Christopher · Sansone · Haris  
 
 [![SeniorVoice Präsentation](docs/SeniorVoice_TitleImage.png)](docs/SeniorVoice_Local_AI_for_Seniors.pdf)
 > Klick auf das Bild öffnet die Zwischenstand-Präsentation (W11, 04.05.2026)
