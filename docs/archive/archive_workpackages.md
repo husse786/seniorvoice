@@ -25,7 +25,7 @@
 | A-02 | docker-compose.yml Skeleton (alle 5 Services) | 🔄 | Yanick | — |
 | A-03 | Branching-Strategie umsetzen (dev branch) + dokumentieren | ✅ | Yanick | 20.03.2026 |
 | A-04 | llama3.2:3b auf Pi pullen + Antwortzeit messen | ⬜ | — | — |
-| A-05 | SSH-Keys für Sansone, Haris, Chris einrichten | ❌ | — | Blockiert: Keys ausstehend |
+| A-05 | SSH-Keys für Teammitglied 1, Teammitglied 2, Teammitglied 3 einrichten | ❌ | — | Blockiert: Keys ausstehend |
 | A-06 | Externer SSH-Zugang via Uni IoT-Netz klären | ❌ | — | Blockiert: Prof. kontaktieren |
 
 ---
@@ -106,7 +106,7 @@
 
 | ID | Beschreibung | Verantwortlich |
 |---|---|---|
-| A-05 | SSH-Keys von Sansone, Haris, Chris ausstehend | Yanick — Keys einsammeln |
+| A-05 | SSH-Keys von Teammitglied 1, Teammitglied 2, Teammitglied 3 ausstehend | Yanick — Keys einsammeln |
 | A-06 | Externer SSH via Uni IoT-Netz | Yanick — Prof. Weber kontaktieren |
 
 ---

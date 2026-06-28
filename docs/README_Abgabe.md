@@ -1,6 +1,6 @@
 # SeniorVoice — Abgabe IoT Data Streaming & Analytics FS2026
 
-**Gruppe:** Yanick Fischer · Chris · Sansone · Haris  
+**Gruppe:** Yanick Fischer · Teammitglied 3 · Teammitglied 1 · Teammitglied 2  
 **Betreuer:** Prof. Christian Weber  
 **Abgabedatum:** 28. Juni 2026
 

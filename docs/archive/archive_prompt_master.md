@@ -55,7 +55,7 @@ Lies docs/current_state.md — was ist der nächste Schritt?
 ## Hinweise für das Team
 
 **Wer kann diesen Prompt verwenden?**  
-Alle Teammitglieder — Yanick, Chris, Sansone, Haris. Jeder kann eine Session starten und am aktuellen Stand weiterarbeiten.
+Alle Teammitglieder — Yanick, Teammitglied 3, Teammitglied 1, Teammitglied 2. Jeder kann eine Session starten und am aktuellen Stand weiterarbeiten.
 
 **Was tun nach einer Session?**
 

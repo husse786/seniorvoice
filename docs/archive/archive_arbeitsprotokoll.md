@@ -1,7 +1,7 @@
 # Arbeitsprotokoll — SeniorVoice
 **Projekt:** SeniorVoice — Lokaler KI-Sprachassistent für Senioren  
 **Modul:** IoT Data Streaming & Analytics · ZHAW FS 2026  
-**Team:** Yanick · Chris · Sansone · Haris  
+**Team:** Yanick · Teammitglied 3 · Teammitglied 1 · Teammitglied 2  
 **Protokollführung:** Yanick  
 
 ---
@@ -34,15 +34,15 @@ Gemäss Projektplan W05 (Modul 0 — Infrastruktur & Setup) wurde der Raspberry 
 - AI Hat+ physisch installiert (Evaluation für Whisper-Acceleration)
 - Pi Connect eingerichtet und mit Yanick-Account verknüpft (Remote-Display-Zugriff)
 - Netzwerksicherheit evaluiert und konfiguriert:
-  - Guest-WiFi-Isolation versucht → Salt Fiber Box unterstützt kein Port-Forwarding auf Guest-Subnet (`192.168.254.x`) → Pi zurück auf Haupt-LAN (`192.168.1.36`)
+  - Guest-WiFi-Isolation versucht → Salt Fiber Box unterstützt kein Port-Forwarding auf Guest-Subnet (`192.168.254.x`) → Pi zurück auf Haupt-LAN (`<PI_IP>`)
   - IPv6-only Anschluss bei Salt bestätigt → kein externer SSH via Port-Forwarding möglich
   - UFW aktiviert: Default deny incoming, Port 22 TCP erlaubt
   - Docker UFW-Bypass deaktiviert (`"iptables": false` in `/etc/docker/daemon.json`)
 - Benutzerverwaltung gehärtet:
-  - Benutzer `yanick`, `sansone`, `haris`, `chris` erstellt (alle mit sudo)
+  - Benutzer `yanick`, `user1`, `user2`, `user3` erstellt (alle mit sudo)
   - Default-User `admin` gesperrt (`passwd -l admin`)
   - `PermitRootLogin no` in `/etc/ssh/sshd_config` gesetzt
-- SSH Key-Auth für `yanick` eingerichtet und getestet (`192.168.1.36`)
+- SSH Key-Auth für `yanick` eingerichtet und getestet (`<PI_IP>`)
 - Locale-Fehler behoben (`en_GB.UTF-8`)
 - Docker Engine 29.3.0 installiert (via `get.docker.com`)
   - Alle 4 Benutzer zur `docker`-Gruppe hinzugefügt
@@ -85,8 +85,8 @@ Gemäss Projektplan W05 (Modul 0 — Infrastruktur & Setup) wurde der Raspberry 
 
 **5 · Ergebnis / Lieferobjekte**
 
-- Raspberry Pi 5 headless, SSH-zugänglich auf `192.168.1.36`
-- 4 Benutzerkonten angelegt (`yanick`, `sansone`, `haris`, `chris`), `admin` gesperrt, Root-Login deaktiviert
+- Raspberry Pi 5 headless, SSH-zugänglich auf `<PI_IP>`
+- 4 Benutzerkonten angelegt (`yanick`, `user1`, `user2`, `user3`), `admin` gesperrt, Root-Login deaktiviert
 - UFW aktiv, Docker UFW-Bypass behoben (`iptables: false`)
 - Docker Engine 29.3.0 lauffähig (arm64), `hello-world` verifiziert
 - Ollama 0.18.2 installiert, on-demand startbar, lokal gebunden an `127.0.0.1:11434`
@@ -101,7 +101,7 @@ Gemäss Projektplan W05 (Modul 0 — Infrastruktur & Setup) wurde der Raspberry 
 - `docker-compose.yml` Skeleton für alle 5 Services aufsetzen (A-02)
 - Branching-Strategie definieren und dokumentieren (A-03)
 - `llama3.2:3b` auf Pi pullen und Antwortzeit messen (A-04)
-- SSH-Zugang für Sansone, Haris, Chris einrichten — public keys einsammeln (A-05)
+- SSH-Zugang für Teammitglied 1, Teammitglied 2, Teammitglied 3 einrichten — public keys einsammeln (A-05)
 - Externer SSH-Zugang via Universität IoT-Netz mit Prof. klären (A-06)
 - stt-service Skeleton implementieren (W06 Start)
 

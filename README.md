@@ -1,7 +1,7 @@
 # SeniorVoice
 **Lokaler KI-Sprachassistent für ältere Personen**
 ZHAW IoT Data Streaming & Analytics · FS 2026
-Team: Yanick · Chris · Sansone · Haris
+Team: Yanick · Teammitglied 3 · Teammitglied 1 · Teammitglied 2
 
 [![SeniorVoice Präsentation](docs/SeniorVoice_TitleImage.png)](docs/SeniorVoice_Local_AI_for_Seniors.pdf)
 > Klick auf das Bild öffnet die Zwischenstand-Präsentation (W11, 04.05.2026)
@@ -181,7 +181,7 @@ git checkout -b feature/dein-feature
 
 ### 5 — SSH-Zugang zum Raspberry Pi
 
-Der Pi läuft headless auf `192.168.1.36`. Zugang nur via SSH Key-Auth.
+Der Pi läuft headless auf `<PI_IP>`. Zugang nur via SSH Key-Auth.
 
 ```bash
 # Key generieren (einmalig)
@@ -191,7 +191,7 @@ ssh-keygen -t ed25519 -C "deinname@seniorvoice"
 cat ~/.ssh/id_ed25519.pub
 
 # Verbinden (nachdem Key hinzugefügt wurde)
-ssh deinname@192.168.1.36
+ssh deinname@<PI_IP>
 ```
 
 ### 6 — Deploy-Workflow
@@ -200,7 +200,7 @@ Code wird auf Mac/PC editiert und via `scp` auf den Pi deployed:
 
 ```bash
 # Mac → Pi (geänderte Dateien)
-scp pipeline/datei.py yanick@192.168.1.36:/tmp/
+scp pipeline/datei.py yanick@<PI_IP>:/tmp/
 
 # Pi (deployen + starten)
 sudo cp /tmp/*.py /home/admin/seniorvoice/pipeline/

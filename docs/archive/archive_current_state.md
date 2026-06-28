@@ -18,7 +18,7 @@ W05 Infrastruktur-Setup ist abgeschlossen. Raspberry Pi 5 läuft headless, gehä
 **A-04** — `llama3.2:3b` auf Pi pullen und Antwortzeit messen
 
 ### Offene Blocker
-- **A-05** — SSH-Keys von Sansone, Haris, Chris noch ausstehend
+- **A-05** — SSH-Keys von Teammitglied 1, Teammitglied 2, Teammitglied 3 noch ausstehend
 - **A-06** — Externer SSH via Uni IoT-Netz — Prof. Weber kontaktieren
 
 ### Letzter Log-Eintrag

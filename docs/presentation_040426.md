@@ -1,5 +1,5 @@
 SeniorVoice — Status-Praesentation 04.05.2026
-Modul: IoT Data Streaming & Analytics, ZHAW FS 2026 Team: Yanick, Chris, Sansone, Haris | Betreuer: Christian Weber Projektwoche: W11
+Modul: IoT Data Streaming & Analytics, ZHAW FS 2026 Team: Yanick, Teammitglied 3, Teammitglied 1, Teammitglied 2 | Betreuer: Christian Weber Projektwoche: W11
 --------------------------------------------------------------------------------
 1 — Projektidee (2-3 Min, 3-4 Slides)
 Problem: Digitale Ausgrenzung älterer Menschen

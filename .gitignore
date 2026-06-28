@@ -7,6 +7,12 @@ __pycache__/
 *.so
 .DS_Store
 
+# Claude Workspace
+.claude
+CLAUDE.md
+CONTEXT.md
+QUICKSTART.md
+
 # Distribution / packaging
 .Python
 build/

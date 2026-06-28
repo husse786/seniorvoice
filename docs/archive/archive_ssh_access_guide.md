@@ -2,7 +2,7 @@
 
 **Projekt:** SeniorVoice | ZHAW IoT Data Modul  
 **Maintainer:** Yanick  
-**Pi IP (Heimnetz):** `192.168.1.36`  
+**Pi IP (Heimnetz):** `<PI_IP>`  
 **Hostname:** `senioragent`
 
 ---
@@ -90,20 +90,20 @@ Du erhältst eine Bestätigung via Teams sobald dein Key hinzugefügt wurde.
 ### Option A: Im Heimnetz (Yanicks WiFi)
 
 ```bash
-ssh username@192.168.1.36
+ssh username@<PI_IP>
 ```
 
 | Teammitglied | Befehl |
 |---|---|
-| Yanick | `ssh yanick@192.168.1.36` |
-| Sansone | `ssh sansone@192.168.1.36` |
-| Haris | `ssh haris@192.168.1.36` |
-| Chris | `ssh chris@192.168.1.36` |
+| Yanick | `ssh yanick@<PI_IP>` |
+| Teammitglied 1 | `ssh user1@<PI_IP>` |
+| Teammitglied 2 | `ssh user2@<PI_IP>` |
+| Teammitglied 3 | `ssh user3@<PI_IP>` |
 
 **Erster Login:** dein Laptop fragt einmalig nach Bestätigung des Fingerprints — `yes` eingeben und Enter drücken:
 
 ```
-The authenticity of host '192.168.1.36' can't be established.
+The authenticity of host '<PI_IP>' can't be established.
 ED25519 key fingerprint is SHA256:...
 Are you sure you want to continue connecting (yes/no)? yes
 ```
@@ -121,7 +121,7 @@ Sobald der Pi im Uni IoT-Netz registriert ist, wird eine neue IP vergeben. Yanic
 | `Permission denied (publickey)` | Key noch nicht hinzugefügt — Yanick kontaktieren |
 | `Connection refused` | Pi ist offline oder SSH läuft nicht — Yanick kontaktieren |
 | `Connection timed out` | Du bist nicht im gleichen Netzwerk wie der Pi |
-| `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED` | Pi wurde neu aufgesetzt — `ssh-keygen -R 192.168.1.36` ausführen und nochmals verbinden |
+| `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED` | Pi wurde neu aufgesetzt — `ssh-keygen -R <PI_IP>` ausführen und nochmals verbinden |
 | Password-Prompt erscheint | Key-Auth noch nicht aktiv — temporäres Passwort von Yanick verwenden |
 
 ---
@@ -131,7 +131,7 @@ Sobald der Pi im Uni IoT-Netz registriert ist, wird eine neue IP vergeben. Yanic
 - [ ] Key Pair generiert (`ssh-keygen`)
 - [ ] Öffentlichen Key (`cat ~/.ssh/id_ed25519.pub`) via Teams an Yanick gesendet
 - [ ] Bestätigung von Yanick erhalten
-- [ ] Erfolgreich verbunden: `ssh username@192.168.1.36`
+- [ ] Erfolgreich verbunden: `ssh username@<PI_IP>`
 - [ ] Temporäres Passwort geändert: `passwd`
 
 ---

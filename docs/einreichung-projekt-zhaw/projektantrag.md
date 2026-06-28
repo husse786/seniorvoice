@@ -2,7 +2,7 @@
 **Lokaler KI-Sprachassistent für ältere Personen**
 
 IoT Data Streaming & Analytics · ZHAW FS 2026  
-Team: Yanick · Chris · Sansone · Haris | Betreuer: Christian Weber
+Team: Yanick · Teammitglied 3 · Teammitglied 1 · Teammitglied 2 | Betreuer: Christian Weber
 
 ---
 
@@ -75,12 +75,12 @@ Alle Services laufen auf dem Raspberry Pi innerhalb von Docker Compose.
 | Komponente | Spezifikation | Zweck | Status |
 |---|---|---|---|
 | Raspberry Pi 4 (4 GB) | Modul-Hardware (geliehen) | Entwicklung + MVP-Demo | ✅ Vorhanden |
-| Raspberry Pi 5 (16 GB) | Privat (Chris) | Standalone-Prototyp / Stretch | ⏳ Anfragen |
+| Raspberry Pi 5 (16 GB) | Privat (Teammitglied 3) | Standalone-Prototyp / Stretch | ⏳ Anfragen |
 | Sense HAT | Modul-Hardware (geliehen) | Temperatur, Luftfeuchtigkeit, LEDs | ✅ Vorhanden |
 | USB-Mikrofon | ReSpeaker 2-Mic oder äquivalent | Spracheingabe | 🛒 Beschaffen |
 | Lautsprecher | USB / 3.5mm | Sprachausgabe (TTS) | 🛒 Beschaffen |
 | PIR-Bewegungssensor | HC-SR501 | Wake-on-Motion Trigger | 🛒 Beschaffen |
-| AI Hat+ (optional) | Hailo-8 (Chris privat) | Whisper-Acceleration (Stretch) | ⏳ Anfragen |
+| AI Hat+ (optional) | Hailo-8 (Teammitglied 3 privat) | Whisper-Acceleration (Stretch) | ⏳ Anfragen |
 
 **Hardware-Entscheid:** Der Pi 4 (Modul) wird für MVP und Entwicklung verwendet. Der Pi 5 (16 GB, privat) wird für den finalen Standalone-Prototypen eingesetzt. AI Hat wird ausschliesslich für Whisper-STT-Acceleration evaluiert — nicht für LLM-Workloads (CPU-Inferenz auf Pi 5 ist für 3B-Modelle performanter als Hailo-10H).
 
@@ -163,7 +163,7 @@ W01–W04 wurden für Projektidee, Architekturentscheid, Hardwareevaluation und 
 | Woche | Phase | Inhalt / Meilenstein | Modul | Verantw. |
 |---|---|---|---|---|
 | W01–W04 | ✅ Abgeschlossen | Projektidee, Architektur, Hardwareevaluation, Projektantrag | — | Yanick |
-| W05 | 🔧 Infra | Pi headless + Docker + docker-compose; Pi Connect; Repo-Setup | M0 | Yanick (Sansone) |
+| W05 | 🔧 Infra | Pi headless + Docker + docker-compose; Pi Connect; Repo-Setup | M0 | Yanick (Teammitglied 1) |
 | W06 | 🎙 STT | stt-service: faster-whisper containerisiert; USB-Mikrofon + PIR; POST /transcribe | M1 | TBD |
 | W07 | 🧠 LLM | llm-service: Ollama + phi3-mini auf Pi; POST /chat; erste Intent-Tests | M2 | TBD |
 | W08 | 🔊 TTS + Action | tts-service: Piper TTS DE; action-service: 2 Use Cases; SQLite-Logger | M3 + M4 | TBD |
@@ -195,9 +195,9 @@ Privacy by Design ist ein nicht-verhandelbares Designprinzip. Alle Verarbeitung 
 | Person | Schwerpunkt | Backup-Rolle |
 |---|---|---|
 | Yanick | Projektleitung, Architektur, Dokumentation, llm-service | action-service |
-| Chris | Hardware (Pi 5 + AI Hat), stt-service, PIR-Sensor | tts-service |
-| Sansone | Pi-Setup, Docker-Infrastruktur, logger-dashboard | stt-service |
-| Haris | tts-service, action-service, Grafana-Dashboard | llm-service |
+| Teammitglied 3 | Hardware (Pi 5 + AI Hat), stt-service, PIR-Sensor | tts-service |
+| Teammitglied 1 | Pi-Setup, Docker-Infrastruktur, logger-dashboard | stt-service |
+| Teammitglied 2 | tts-service, action-service, Grafana-Dashboard | llm-service |
 
 **Arbeitsweise:** Raspberry Pi per SSH + Pi Connect für alle zugänglich → iterativ-kollaborative Entwicklung ohne physischen Gerätetausch. Dokumentation via RAID-Log (Excel) + Arbeitsprotokoll (Word/MD) auf MS Teams SharePoint.
 
