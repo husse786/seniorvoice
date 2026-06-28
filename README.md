@@ -16,6 +16,8 @@ Team: Yanick · Chris · Sansone · Haris
 - [Für neue Teammitglieder](#für-neue-teammitglieder)
 - [Repo-Struktur](#repo-struktur)
 
+> **Abschlussdokumentation:** [`docs/Projektdokumentation.md`](docs/Projektdokumentation.md) — konsolidierte Zusammenfassung (Architektur, Benchmark-Ergebnisse, Lessons Learned, Kosten). Detaillierte Logs aller Sessions: [`docs/logs/`](docs/logs/)
+
 ---
 
 ## Was ist SeniorVoice?
@@ -49,11 +51,12 @@ PIR-Sensor → Mikrofon → STT → LLM → TTS → Lautsprecher
 
 ## Aktueller Stand
 
-> **W11 (03.05.2026)** — MVP-Pipeline end-to-end funktional auf Raspberry Pi 5
+> **W23 (28.06.2026)** — Projekabschluss: MVP vollständig deployed, Performance-Tuning abgeschlossen, Grafana-Dashboard live, Abgabe eingereicht
 
-### Zwischenpräsentation
+### Präsentationen
 
-[SeniorVoice_Local_AI_for_Seniors.pdf](docs/SeniorVoice_Local_AI_for_Seniors.pdf) — Statusbericht W11 (04.05.2026)
+- [SeniorVoice_Local_AI_for_Seniors.pdf](docs/SeniorVoice_Local_AI_for_Seniors.pdf) — Zwischenpräsentation W11 (04.05.2026)
+- [SeniorVoice_Praesentation.pdf](docs/SeniorVoice_Praesentation.pdf) — Abschlusspräsentation W23 (29.06.2026)
 
 ### Pipeline (funktional)
 
@@ -67,7 +70,7 @@ PIR-Sensor (HC-SR501) → C920E Mikrofon → faster-whisper STT → Ollama LLM �
 |---|---|---|
 | Hardware | Raspberry Pi 5 (16 GB) | NVMe SSD (Crucial P310), headless |
 | STT | faster-whisper (small, int8) | Lokale Transkription, CPU-only |
-| LLM (lokal) | Ollama — gemma3:1b | 3.8 tok/s, 1.3s TTFT, Q4_K_M |
+| LLM (lokal) | Ollama — gemma3:1b | **10.4 tok/s**, 698ms TTFT (nach Tuning), Q4_K_M |
 | LLM (Cloud-Fallback) | Moonshot Kimi k2.6 | 6.0 tok/s, aber 11.7s TTFT |
 | TTS | Piper TTS (de_DE-thorsten-medium) | Lokale Sprachsynthese |
 | Audio | PulseAudio | USB-Mic → BT-Speaker Routing |
@@ -81,12 +84,13 @@ Vollständige Ergebnisse: [model_comparisson.md](docs/models/model_comparisson.m
 
 | Model | Type | tok/s | TTFT | German | Status |
 |---|---|---|---|---|---|
-| gemma3:1b | Local | 3.8 | 1.3s | Acceptable | **Kandidat** |
+| gemma3:1b (tuned) | Local | **10.4** | 698ms | Acceptable | **Produktion** |
+| gemma3:1b (baseline) | Local | 3.8 | 1.3s | Acceptable | Ausgangswert |
 | gemma3n:e2b | Local | 2.4 | 2.3s | Good | Kandidat |
 | kimi-k2.6 | Cloud | 6.0 | 11.7s | Excellent | Zu langsam (TTFT) |
 | gemma3:4b | Local | 1.7 | 2.5s | Excellent | Zu langsam |
 
-**Erkenntnis:** gemma3:1b liefert mit Streaming die beste User Experience (~4s bis erstes gesprochenes Wort), obwohl Kimi höhere tok/s hat (11.7s Wartezeit bis erste Antwort).
+**Schlüsselresultat:** 3.8 → 10.4 tok/s (+174%) durch Overclock 2.8 GHz + num_thread=3 Optimierung. Vollständige Benchmark-Ergebnisse: [`docs/Projektdokumentation.md`](docs/Projektdokumentation.md)
 
 ### Features (über MVP hinaus)
 
@@ -98,13 +102,14 @@ Vollständige Ergebnisse: [model_comparisson.md](docs/models/model_comparisson.m
 - **Structured Logging** — RotatingFileHandler (5 MB × 5 Backups)
 - **Interaction Logs** — Timing-Daten (STT/LLM/TTS) in SQLite, Grafana-ready
 
-### Nächste Schritte
+### Abgeschlossen (W11–W23)
 
-1. Performance-Tuning gemma3:1b (`num_ctx`-Reduktion, Thread-Count, System-Prompt)
-2. Ollama als systemd-Service (Autostart, Model Pre-Load)
-3. Pipeline als systemd-Service (Autostart beim Boot)
-4. Grafana Performance Dashboard
-5. Docker-Compose + Microservice-Split
+- ✓ Performance-Tuning: 2.8 GHz Overclock + num_thread=3 → 10.4 tok/s (+174%)
+- ✓ CPU Governor `performance` via systemd-Unit (Autostart beim Boot)
+- ✓ Grafana 11.6.0 Dashboard (5 Panels, frser-sqlite-datasource v4.0.2)
+- ✓ Facts Re-Injection: Nutzermerkmale vor jeder Anfrage eingefügt
+- ✓ LLM Warmup bei Startup: eliminiert Cold-Start-Latenz
+- ✗ Docker-Compose / Microservice-Split: nicht implementiert (Scope-Entscheidung D-06)
 
 ---
 
@@ -209,12 +214,13 @@ python main.py --no-pir --once
 
 | Datei | Inhalt |
 |---|---|
-| `CONTEXT.md` (Root) | Aktueller Projektstand, Hardware, nächste Schritte |
+| **`docs/Projektdokumentation.md`** | **Abschlussdokumentation (konsolidierte Kurzfassung)** |
+| `docs/logs/` | Chronologische Arbeitsprotokolle pro Session (14 Einträge, März–Juni 2026) |
+| `CONTEXT.md` (Root) | Aktueller Projektstand, Hardware, technische Entscheide (D-01–D-50) |
 | `CLAUDE.md` (Root) | Architektur-Regeln, Coding-Konventionen |
 | `docs/projektantrag.md` | Vollständiger Projektantrag (Scope, Timeline) |
-| `docs/logs/` | Chronologische Arbeitsprotokolle pro Session |
 | `docs/models/model_comparisson.md` | LLM-Benchmark-Ergebnisse |
-| `docs/hardware/` | Datenblätter aller Hardwarekomponenten (PDF) |
+| `docs/hardware/Hardware-Beschaffung.pdf` | Hardware-Kostenübersicht (CHF 895.42) |
 
 ---
 
