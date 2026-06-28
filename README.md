@@ -12,6 +12,7 @@ Team: Yanick · Chris · Sansone · Haris
 
 - [Was ist SeniorVoice?](#was-ist-seniorvoice)
 - [Aktueller Stand](#aktueller-stand)
+- [Hardware](#hardware)
 - [Für neue Teammitglieder](#für-neue-teammitglieder)
 - [Repo-Struktur](#repo-struktur)
 
@@ -104,6 +105,33 @@ Vollständige Ergebnisse: [model_comparisson.md](docs/models/model_comparisson.m
 3. Pipeline als systemd-Service (Autostart beim Boot)
 4. Grafana Performance Dashboard
 5. Docker-Compose + Microservice-Split
+
+---
+
+## Hardware
+
+> Vollständige Kostenzusammenfassung und alle Rechnungsdetails: [docs/hardware/Hardware-Beschaffung.pdf](docs/hardware/Hardware-Beschaffung.pdf)
+
+### Benötigte Komponenten (Prototyp-Nachbau)
+
+| Menge | Artikel | Preis CHF |
+|------:|---------|----------:|
+| 1 | HutoPi Raspberry Pi 5 Starter Kit – 16 GB | 249.00 |
+| 1 | Raspberry Pi Official Fan/Heat Sink for Pi 5 | 9.50 |
+| 1 | Raspberry Pi Official M.2 HAT+ Compact | 15.70 |
+| 1 | Crucial P310 PCIe 4.0 NVMe 2230 M.2 SSD 1 TB | 132.98 |
+| 1 | KKSB Gehäuse für Raspberry Pi 5 + HATs, Alu, schwarz | 16.31 |
+| 1 | Raspberry Pi Infrarot Bewegungsmelder PIR HC-SR501 | 1.94 |
+| 1 | Jumperkabel Dupont Set (60 Stk., für GPIO-Verdrahtung) | ~15.00 |
+| | **Summe Beschaffung (ohne bereits vorhandene Geräte)** | **~440 CHF** |
+
+**Bereits vorhanden (nicht beschafft, kein Kostenanteil):**
+- Logitech C920E Webcam — als USB-Mikrofon verwendet
+- Sony SRS-XB23 Bluetooth-Lautsprecher — als Audioausgabe verwendet
+
+### Hinweis zur Reproduzierbarkeit
+
+Der Prototyp läuft vollständig headless auf dem Raspberry Pi 5 (NVMe-SSD-Boot, PulseAudio, Python 3.13 venv). Für einen Nachbau werden kein Bildschirm und keine Tastatur benötigt — SSH-Zugang genügt. Der PIR-Sensor (HC-SR501) ist über GPIO17 (Pin 11) angeschlossen; alternativ kann `--no-pir` als Startoption genutzt werden, um Keyboard-Triggering zu aktivieren.
 
 ---
 
