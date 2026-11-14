@@ -53,7 +53,7 @@ def _install_fakes(monkeypatch, spoken):
     faster_whisper.WhisperModel = FakeWhisper
     tts = types.ModuleType("tts")
     tts.speak = lambda text: spoken.append(text)
-    tts.play = lambda path: None
+    tts.play = lambda path, output="handset": None
     for name, mod in [("audio_capture", audio), ("faster_whisper", faster_whisper), ("tts", tts)]:
         monkeypatch.setitem(sys.modules, name, mod)
     sys.modules.pop("stt", None)  # import the real stt.py with the fake model
@@ -131,7 +131,7 @@ def test_tts_audio_deleted_after_playback(env, monkeypatch):
     played = []
     monkeypatch.setattr(tts.shutil, "which", lambda name: "/usr/bin/" + name)
     monkeypatch.setattr(tts.subprocess, "run", fake_run)
-    monkeypatch.setattr(tts, "play", lambda path: played.append(path.exists()))
+    monkeypatch.setattr(tts, "play", lambda path, output="handset": played.append(path.exists()))
 
     tts.speak(ANSWER)
     assert played == [True]
@@ -146,7 +146,7 @@ def test_tts_audio_deleted_when_playback_fails(env, monkeypatch):
         open(out, "wb").write(b"RIFF")
         return types.SimpleNamespace(returncode=0, stderr="")
 
-    def broken_play(path):
+    def broken_play(path, output="handset"):
         raise RuntimeError("no speaker")
 
     monkeypatch.setattr(tts.shutil, "which", lambda name: "/usr/bin/" + name)

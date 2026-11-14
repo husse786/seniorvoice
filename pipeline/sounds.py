@@ -53,6 +53,19 @@ def _build_thinking_chime() -> bytes:
     return _to_wav(np.concatenate([note1, gap, note2]), rate)
 
 
+def _build_ring() -> bytes:
+    """One telephone ring cycle: two short bursts (440+480 Hz), then a pause."""
+    rate = 44100
+
+    def burst(seconds):
+        a = _generate_tone(440.0, seconds, rate, volume=0.25).astype(np.int32)
+        b = _generate_tone(480.0, seconds, rate, volume=0.25).astype(np.int32)
+        return ((a + b) // 2).astype(np.int16)
+    gap = np.zeros(int(rate * 0.2), dtype=np.int16)
+    pause = np.zeros(int(rate * 2.0), dtype=np.int16)
+    return _to_wav(np.concatenate([burst(0.4), gap, burst(0.4), pause]), rate)
+
+
 # Cache paths
 _SOUND_DIR = OUTPUT_DIR / "sounds"
 _CACHE: dict[str, Path] = {}
@@ -60,10 +73,11 @@ _CACHE: dict[str, Path] = {}
 _BUILDERS = {
     "listen": _build_listen_chime,
     "thinking": _build_thinking_chime,
+    "ring": _build_ring,
 }
 
 
-def _get_path(name: str) -> Path:
+def get_path(name: str) -> Path:
     """Get (and generate if needed) a cached sound file."""
     if name in _CACHE and _CACHE[name].exists():
         return _CACHE[name]
@@ -85,7 +99,7 @@ def play_sound(name: str) -> None:
 
     from tts import play
     try:
-        path = _get_path(name)
+        path = get_path(name)
         play(path)
     except Exception as e:
         # Never let a feedback sound crash the pipeline

@@ -27,7 +27,6 @@ SENT = "In Ordnung. Ich sende die Nachricht an {name}."
 NOT_SENT = "In Ordnung, ich sende nichts."
 NOTHING_HEARD = "Ich habe nichts verstanden. Drücken Sie bitte nochmals auf Familie."
 NO_RECIPIENT = "Es ist niemand aus der Familie hinterlegt."
-LIFT_HANDSET = "Bitte heben Sie zuerst den Hörer ab und drücken Sie dann auf Familie."
 
 _SCHEMA = """\
 CREATE TABLE IF NOT EXISTS outbox (

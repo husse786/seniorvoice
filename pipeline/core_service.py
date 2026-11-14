@@ -27,7 +27,8 @@ from typing import Callable
 
 from logging_config import setup_logging, get_logger
 from bus import Bus, BUS_FD_ENV
-from hardware import InputEvent, KeyboardInput, Ringer, SimulatedRinger
+from hardware import (AudioRinger, GpioInput, InputEvent, KeyboardInput, Ringer,
+                      SimulatedRinger)
 
 log = get_logger("core")
 
@@ -40,6 +41,10 @@ HEARTBEAT_TIMEOUT = float(os.getenv("CORE_HEARTBEAT_TIMEOUT", "20"))
 # counts as an LLM hang (LLM_TIMEOUT is 60 s by default; this is a backstop).
 LLM_HANG_TIMEOUT = float(os.getenv("CORE_LLM_HANG_TIMEOUT", "90"))
 RESTART_BACKOFF_MAX = 60.0
+
+# Buttons whose answer is spoken in the handset (A9): lift it first
+HANDSET_BUTTONS = ("familie", "heute", "kalender")
+LIFT_HANDSET = "Bitte heben Sie zuerst den Hörer ab und drücken Sie dann den Knopf nochmals."
 
 HANG_MESSAGE = (
     "Entschuldigung, ich habe gerade ein technisches Problem. "
@@ -246,8 +251,7 @@ class Core:
         elif event.kind == "button" and event.name == "hilfe":
             # Never through the dialog process: works even if it hangs
             self.help.trigger()
-        elif event.kind == "button" and event.name == "familie" and not self.in_call:
-            from family import LIFT_HANDSET
+        elif event.kind == "button" and event.name in HANDSET_BUTTONS and not self.in_call:
             self._say_async(LIFT_HANDSET)
         elif event.kind == "button":
             self.supervisor.send("button", name=event.name)
@@ -317,13 +321,13 @@ class AnnouncementQueue:
 def _speak(text: str) -> None:
     """Announcement from the core (no LLM). Raises if it cannot be played."""
     from tts import speak
-    speak(text)
+    speak(text, output="speaker")   # core speaks over the room speaker (A13)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="SeniorVoice core process")
-    parser.add_argument("--input", choices=["keyboard"], default="keyboard",
-                        help="input source (GPIO follows in PR 7)")
+    parser.add_argument("--input", choices=["keyboard", "gpio"], default="keyboard",
+                        help="keyboard simulation or the telephone on the Pi (GPIO)")
     args = parser.parse_args()
 
     setup_logging()
@@ -347,9 +351,12 @@ def main() -> None:
     help_service.run_worker()
     from family import run_sender
     run_sender(help_service.channel)
-    core = Core(DialogSupervisor(), SimulatedRinger(), help_handler=help_service,
+    ringer = AudioRinger() if args.input == "gpio" else SimulatedRinger()
+    core = Core(DialogSupervisor(), ringer, help_handler=help_service,
                 announce=voice.say_and_wait)
-    if args.input == "keyboard":
+    if args.input == "gpio":
+        GpioInput().start(core.events)
+    else:
         KeyboardInput().start(core.events)
     signal.signal(signal.SIGTERM, lambda *a: setattr(core, "running", False))
     log.info("Core started")

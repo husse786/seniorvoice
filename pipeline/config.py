@@ -61,6 +61,20 @@ DB_PATH = os.getenv("DB_PATH", MEMORY_DB_PATH)
 PIR_GPIO_PIN = int(os.getenv("PIR_GPIO_PIN", "4"))
 PIR_GPIO_CHIP = int(os.getenv("PIR_GPIO_CHIP", "4"))  # Pi 5 uses gpiochip4
 
+# Telephone hardware (PR 7). Hook switch NC to GND with pull-up: off-hook = HIGH
+# (FS26 how-to_analog-telephone.md). Buttons to GND with pull-up: pressed = LOW.
+# Pi 5: gpiochip4 on older kernels, gpiochip0 on newer Raspberry Pi OS.
+GPIO_CHIP = int(os.getenv("GPIO_CHIP", "4"))
+HOOK_GPIO_PIN = int(os.getenv("HOOK_GPIO_PIN", "17"))
+HOOK_OFFHOOK_LEVEL = int(os.getenv("HOOK_OFFHOOK_LEVEL", "1"))
+BUTTON_PINS = os.getenv(
+    "BUTTON_PINS", "sprechen:5,heute:6,kalender:13,rat:19,familie:26,hilfe:21")
+GPIO_DEBOUNCE_MS = int(os.getenv("GPIO_DEBOUNCE_MS", "30"))
+# ALSA devices (aplay -D). Conversation over the handset, ringing and the Help
+# confirmation over the room speaker (A9, A13). Empty = system default.
+HANDSET_ALSA_DEVICE = os.getenv("HANDSET_ALSA_DEVICE", "")
+SPEAKER_ALSA_DEVICE = os.getenv("SPEAKER_ALSA_DEVICE", "")
+
 # Audio Feedback
 SOUND_ENABLED = os.getenv("SOUND_ENABLED", "true").lower() in ("true", "1", "yes")
 
