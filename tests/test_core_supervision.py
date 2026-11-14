@@ -186,7 +186,7 @@ def test_help_sentences_jump_the_announcement_queue(env):
     import threading
     played, gate = [], threading.Event()
 
-    def speak(text):
+    def speak(text, output="speaker"):
         if text == "first":
             gate.wait(2)
         played.append(text)
@@ -207,6 +207,6 @@ def test_help_sentences_jump_the_announcement_queue(env):
 def test_failed_playback_reported_to_waiter(env):
     core_mod = env.load("core_service")
 
-    def broken(text):
+    def broken(text, output="speaker"):
         raise OSError("no audio")
     assert core_mod.AnnouncementQueue(broken).say_and_wait("x") is False

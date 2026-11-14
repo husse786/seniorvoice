@@ -58,7 +58,11 @@ def player_command(wav_path: Path, output: str = "handset") -> list[str] | None:
     """
     device = SPEAKER_ALSA_DEVICE if output == "speaker" else HANDSET_ALSA_DEVICE
     aplay = shutil.which("aplay")
-    if device and aplay:
+    if device:
+        if not aplay:
+            # Never fall back to the default output: the handset's words could
+            # end up on the room speaker
+            raise RuntimeError(f"aplay not found, cannot play on the {output} device")
         return [aplay, "-q", "-D", device, str(wav_path)]
     paplay = shutil.which("paplay")
     if paplay:

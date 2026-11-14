@@ -107,8 +107,82 @@ def test_handset_already_lifted_at_start(env):
                       button_pins=dict(PINS), sleep=lambda s: time.sleep(0.01))
     events = queue.Queue()
     gi.start(events)
-    gi.running = False
-    assert events.get(timeout=1) == hw.InputEvent("hook_off")
+    assert events.empty()                                 # not at once (debounce)
+    try:
+        assert events.get(timeout=1) == hw.InputEvent("hook_off")
+    finally:
+        gi.running = False
+
+
+def test_glitch_at_start_starts_no_call(env):
+    hw, gi, lg, clock, handle, stable = _gpio(env)
+    stable[17] = 0                                        # as start() sets it
+    events = queue.Queue()
+    lg.levels[17] = 1
+    _rounds(gi, handle, stable, clock, events, 10)        # 10 ms glitch
+    lg.levels[17] = 0
+    _rounds(gi, handle, stable, clock, events, 60)
+    assert events.empty()
+
+
+def test_unreadable_gpio_makes_core_exit(env):
+    hw = env.load("hardware")
+
+    class Broken(FakeLgpio):
+        reads = 0
+
+        def gpio_read(self, handle, pin):
+            Broken.reads += 1
+            if Broken.reads > 7:                          # after the start reads
+                raise OSError("gpio gone")
+            return 1
+    gi = hw.GpioInput(lgpio_module=Broken({}), chip=4, hook_pin=17, offhook_level=1,
+                      button_pins=dict(PINS), sleep=lambda s: None)
+    events = queue.Queue()
+    gi.start(events)
+    assert events.get(timeout=2) == hw.InputEvent("input_failed")
+    core_mod = env.load("core_service")
+    hw2 = __import__("hardware")
+
+    class Sup:
+        on_restart = None
+
+        def send(self, *a, **k):
+            return True
+
+        def check(self):
+            pass
+    core = core_mod.Core(Sup(), hw2.SimulatedRinger(), with_reminders=False)
+    core.handle(hw2.InputEvent("input_failed"))
+    assert core.failed and not core.running
+
+
+def test_configured_device_never_falls_back_to_default(env, monkeypatch):
+    monkeypatch.setenv("HANDSET_ALSA_DEVICE", "plughw:CARD=Device,DEV=0")
+    tts = env.load("tts")
+    monkeypatch.setattr(tts.shutil, "which", lambda name: "/usr/bin/paplay" if name == "paplay" else None)
+    from pathlib import Path
+    with pytest.raises(RuntimeError):
+        tts.player_command(Path("a.wav"))
+
+
+def test_announcement_pauses_ringing(env):
+    core_mod = env.load("core_service")
+    hw = __import__("hardware")
+    ringer = hw.AudioRinger(command=lambda: [sys.executable, "-c", "import time; time.sleep(30)"])
+    ringer.ring()
+    time.sleep(0.3)
+    seen = []
+
+    def speak(text, output="speaker"):
+        proc = ringer._proc
+        seen.append(proc is None or proc.poll() is not None)   # ring player has ended
+    q = core_mod.AnnouncementQueue(speak, ringer=ringer)
+    assert q.say_and_wait("Hilfe") is True
+    assert seen == [True]
+    time.sleep(0.3)
+    assert ringer.ringing and ringer._proc.poll() is None       # ringing resumed
+    ringer.stop()
 
 
 def test_button_pin_config_is_checked(env):
@@ -228,3 +302,143 @@ def test_kalender_without_handset_asks_to_lift(env):
             break
         time.sleep(0.01)
     assert said == [core_mod.LIFT_HANDSET] and sent == []
+
+
+def test_core_sentences_for_the_caller_go_to_the_handset(env):
+    """A9/A13: reminder after pickup and restart notice in the handset;
+    "please lift the handset" on the room speaker."""
+    core_mod = env.load("core_service")
+    hw = __import__("hardware")
+    appts = __import__("appointments")
+    speaker, handset, sent = [], [], []
+
+    class Sup:
+        on_restart = None
+
+        def send(self, kind, **kw):
+            sent.append(kind)
+            return True
+
+        def check(self):
+            pass
+    core = core_mod.Core(Sup(), hw.SimulatedRinger(), announce=speaker.append,
+                         announce_handset=handset.append)
+    now = datetime.now(timezone.utc)
+    appts.add_appointment("Arzt", (now + timedelta(seconds=1)).astimezone(ZoneInfo("Europe/Zurich")),
+                          "Spitex", pre_minutes=0, now=now - timedelta(minutes=1))
+    time.sleep(1.1)
+    core.tick()
+    core.handle(hw.InputEvent("hook_off"))
+    for _ in range(100):
+        if sent:
+            break
+        time.sleep(0.02)
+    assert handset and handset[0].startswith("Guten Tag. Eine Erinnerung")
+    core._on_dialog_restart("test")
+    for _ in range(50):
+        if len(handset) == 2:
+            break
+        time.sleep(0.01)
+    assert handset[1] == core_mod.HANG_MESSAGE
+    core.handle(hw.InputEvent("hook_on"))
+    core.handle(hw.InputEvent("button", "heute"))
+    for _ in range(50):
+        if speaker:
+            break
+        time.sleep(0.01)
+    assert speaker == [core_mod.LIFT_HANDSET] and len(handset) == 2
+
+
+def test_announcement_queue_routes_output_and_pauses_ring_only_for_speaker(env):
+    core_mod = env.load("core_service")
+    played, events = [], []
+
+    class Ringer:
+        def pause(self):
+            events.append("pause")
+
+        def resume(self):
+            events.append("resume")
+
+    def speak(text, output="speaker"):
+        played.append((text, output))
+    q = core_mod.AnnouncementQueue(speak, ringer=Ringer())
+    assert q.say_and_wait("Erinnerung", output="handset") is True
+    assert events == []
+    assert q.say_and_wait("Hilfe") is True
+    assert played == [("Erinnerung", "handset"), ("Hilfe", "speaker")]
+    assert events == ["pause", "resume"]
+
+
+def test_restart_notice_finishes_before_the_call_restarts(env):
+    """The handset is busy with the restart notice; call_start comes after it."""
+    import threading
+    core_mod = env.load("core_service")
+    hw = __import__("hardware")
+    sent, gate, heard = [], threading.Event(), []
+
+    class Sup:
+        on_restart = None
+
+        def send(self, kind, **kw):
+            sent.append(kind)
+            return True
+
+        def check(self):
+            pass
+
+    def handset(text):
+        gate.wait(2)
+        heard.append(text)
+    core = core_mod.Core(Sup(), hw.SimulatedRinger(), announce=lambda t: None,
+                         announce_handset=handset, with_reminders=False)
+    core.handle(hw.InputEvent("hook_off"))
+    assert sent == ["call_start"]
+    core._on_dialog_restart("crash")
+    core._on_dialog_ready()                       # new dialog is ready at once
+    time.sleep(0.1)
+    assert sent == ["call_start"]                 # still waiting for the notice
+    gate.set()
+    for _ in range(100):
+        if len(sent) == 2:
+            break
+        time.sleep(0.01)
+    assert heard == [core_mod.HANG_MESSAGE] and sent == ["call_start", "call_start"]
+
+
+def test_handset_sentence_does_not_delay_help_on_the_speaker(env):
+    import threading
+    core_mod = env.load("core_service")
+    gate, played = threading.Event(), []
+
+    def speak(text, output="speaker"):
+        if output == "handset":
+            gate.wait(2)
+        played.append((text, output))
+    q = core_mod.AnnouncementQueue(speak)
+    q.say("Erinnerung", output="handset")         # long reminder in the handset
+    time.sleep(0.05)
+    assert q.say_and_wait("Hilfe") is True        # not blocked by it
+    assert played == [("Hilfe", "speaker")]
+    gate.set()
+
+
+def test_ring_after_stop_waits_for_a_running_announcement(env):
+    hw = env.load("hardware")
+    started = []
+
+    def command():
+        started.append(1)
+        return [sys.executable, "-c", "import time; time.sleep(30)"]
+    ringer = hw.AudioRinger(command=command)
+    ringer.ring()
+    time.sleep(0.2)
+    ringer.pause()                                # Help is speaking
+    ringer.stop()                                 # ring time over
+    ringer.ring()                                 # next reminder is due
+    time.sleep(0.3)
+    assert len(started) == 1                      # speaker stays free
+    ringer.resume()
+    time.sleep(0.3)
+    assert len(started) == 2
+    ringer.stop()
