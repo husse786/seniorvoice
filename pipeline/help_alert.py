@@ -27,7 +27,7 @@ from logging_config import get_logger
 log = get_logger("help")
 
 ESCALATE_MINUTES = 10          # A14
-DELIVERY_GRACE_SECONDS = 60    # proposal: no delivery to anyone within 60 s -> say 144
+DELIVERY_GRACE_SECONDS = 60    # confirmed 14.11.: no delivery within 60 s -> say 144
 ALERT_RETENTION_DAYS = 30      # D9 proposal
 
 SAY_STARTED = "Ich informiere jetzt {name}. Im Notfall rufen Sie bitte 144 an."
@@ -107,7 +107,14 @@ def list_alerts() -> list[dict]:
 
 
 class HelpService:
-    """Runs in the core. trigger() returns at once; network work is in step()."""
+    """Runs in the core.
+
+    trigger() is called on the core input thread and never touches the
+    database or the network: it only records the request and wakes the
+    worker, which creates the alert, sends, polls acknowledgements and
+    escalates. Each alert keeps its own copy of the contact list, so editing
+    the contacts during an alert cannot break it.
+    """
 
     def __init__(self, channel, announce: Callable[[str], None],
                  senior_name: str = "",
@@ -118,45 +125,38 @@ class HelpService:
         self.senior_name = senior_name
         self.now = now
         self.monotonic = monotonic
-        # Re-entrant: trigger() closes an alert while holding the lock
+        # Re-entrant: helpers close an alert while holding the lock
         self._lock = threading.RLock()
-        self._active: dict | None = None    # {id, pos, notified_mono, delivered, started_mono}
+        # {id, contacts, pos, notified_mono, delivered, started_mono, pending_send}
+        self._active: dict | None = None
+        self._requested = False
+        self._recovered = False
+        self._wake = threading.Event()
         self._stop = threading.Event()
         self._last_purge = 0.0
 
     # --- called from the core loop (must not block) ---
 
     def trigger(self) -> None:
-        contacts = get_contacts()
         with self._lock:
-            if self._active is not None:
-                name = contacts[self._active["pos"]]["name"] if contacts else ""
-                self.announce(SAY_ALREADY.format(name=name))
-                return
-            now = self.now()
-            conn = _conn()
-            try:
-                cur = conn.execute(
-                    "INSERT INTO alerts (created_at, status, delete_after) VALUES (?, ?, ?)",
-                    (_iso(now), OFFEN, _iso(now + timedelta(days=ALERT_RETENTION_DAYS))),
-                )
-                alert_id = cur.lastrowid
-                conn.commit()
-            finally:
-                conn.close()
-            log.warning("HELP pressed (alert %d)", alert_id)
-            if not contacts:
-                self._close(alert_id, NIEMAND)
-                self.announce(SAY_NO_CONTACTS)
-                return
-            self._active = {"id": alert_id, "pos": 0, "notified_mono": None,
-                            "delivered": False, "started_mono": self.monotonic(),
-                            "pending_send": True}
-        self.announce(SAY_STARTED.format(name=contacts[0]["name"]))
+            active = self._active
+            if active is None:
+                self._requested = True
+        self._wake.set()
+        if active is not None:
+            name = active["contacts"][active["pos"]]["name"]
+            self.announce(SAY_ALREADY.format(name=name))
 
-    # --- worker: sends, polls acknowledgements, escalates ---
+    # --- worker: starts alerts, sends, polls acknowledgements, escalates ---
 
     def step(self) -> None:
+        if not self._recovered:
+            self._recovered = True
+            self._recover_open_alerts()
+        with self._lock:
+            requested, self._requested = self._requested, False
+        if requested:
+            self._start()
         if self.monotonic() - self._last_purge > 3600:
             self._last_purge = self.monotonic()
             purge_expired(self.now())
@@ -165,9 +165,9 @@ class HelpService:
         if active is None:
             self._poll_acks(None)
             return
-        contacts = get_contacts()
+        contacts = active["contacts"]
         if active["pending_send"]:
-            self._send(active, contacts)
+            self._send(active)
             with self._lock:
                 active = dict(self._active) if self._active else None
             if active is None:
@@ -182,11 +182,65 @@ class HelpService:
             nxt = active["pos"] + 1
             if nxt < len(contacts):
                 with self._lock:
-                    self._active.update(pos=nxt, pending_send=True, notified_mono=None)
+                    # The next contact gets its own delivery deadline
+                    self._active.update(pos=nxt, pending_send=True, notified_mono=None,
+                                        delivered=False, started_mono=now_m)
                 self.announce(SAY_NEXT.format(prev=contacts[active["pos"]]["name"],
                                               name=contacts[nxt]["name"]))
             else:
                 self._give_up(active)
+
+    def _start(self) -> None:
+        """Create the alert. If that fails, still tell the senior to call 144."""
+        try:
+            contacts = get_contacts()
+            now = self.now()
+            conn = _conn()
+            try:
+                cur = conn.execute(
+                    "INSERT INTO alerts (created_at, status, delete_after) VALUES (?, ?, ?)",
+                    (_iso(now), OFFEN, _iso(now + timedelta(days=ALERT_RETENTION_DAYS))),
+                )
+                alert_id = cur.lastrowid
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            log.error("Help alert could not be created: %s", type(e).__name__)
+            self.announce(SAY_CALL_144)
+            return
+        log.warning("HELP pressed (alert %d)", alert_id)
+        if not contacts:
+            self._close(alert_id, NIEMAND)
+            self.announce(SAY_NO_CONTACTS)
+            return
+        with self._lock:
+            self._active = {"id": alert_id, "contacts": contacts, "pos": 0,
+                            "notified_mono": None, "delivered": False,
+                            "started_mono": self.monotonic(), "pending_send": True}
+        self.announce(SAY_STARTED.format(name=contacts[0]["name"]))
+
+    def _recover_open_alerts(self) -> None:
+        """After a restart, an alert left 'offen' cannot be followed any more.
+
+        Close it; if it is recent, tell the senior to call 144 (A14), so a
+        restart never leaves a Help request silently unanswered.
+        """
+        now = self.now()
+        conn = _conn()
+        try:
+            rows = conn.execute(
+                "SELECT id, created_at FROM alerts WHERE status = ?", (OFFEN,)
+            ).fetchall()
+        finally:
+            conn.close()
+        recent = False
+        for alert_id, created_at in rows:
+            created = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            recent = recent or now - created < timedelta(hours=1)
+            self._close(alert_id, NIEMAND)
+        if recent:
+            self.announce(SAY_CALL_144)
 
     def _message(self) -> str:
         when = self.now().astimezone(LOCAL_TZ).strftime("%H:%M")
@@ -195,8 +249,8 @@ class HelpService:
         return (f"SeniorVoice: {who} hat um {when} Uhr den Hilfe-Knopf gedrückt. "
                 "Bitte melden Sie sich. Das ist kein Notruf.")
 
-    def _send(self, active: dict, contacts: list[dict]) -> None:
-        contact = contacts[active["pos"]]
+    def _send(self, active: dict) -> None:
+        contact = active["contacts"][active["pos"]]
         try:
             self.channel.send_alert(contact["address"], self._message(), active["id"])
         except Exception as e:
@@ -224,9 +278,11 @@ class HelpService:
         except Exception as e:
             log.error("Polling acknowledgements failed: %s", type(e).__name__)
             return False
-        contacts = {c["address"]: c for c in get_contacts()}
+        if active is None:
+            return False  # nothing open: old or unknown acknowledgements are ignored
+        contacts = {c["address"]: c for c in active["contacts"]}
         for alert_id, address in acks:
-            if active is None or alert_id != active["id"] or address not in contacts:
+            if alert_id != active["id"] or address not in contacts:
                 continue  # unknown sender or old alert: ignored
             name = contacts[address]["name"]
             self._close(alert_id, QUITTIERT, acknowledged_by=name)
@@ -255,25 +311,28 @@ class HelpService:
 
     def run_worker(self, interval: float = 2.0) -> threading.Thread:
         def loop():
-            while not self._stop.wait(interval):
+            while not self._stop.is_set():
                 try:
                     self.step()
                 except Exception as e:
                     log.error("Help worker error: %s", type(e).__name__)
+                self._wake.wait(interval)   # a Help press wakes the worker at once
+                self._wake.clear()
         thread = threading.Thread(target=loop, name="help", daemon=True)
         thread.start()
         return thread
 
     def stop(self) -> None:
         self._stop.set()
+        self._wake.set()
 
     def simulate_ack(self) -> None:
         """Keyboard simulation: current contact presses "Ich kümmere mich"."""
         with self._lock:
             active = dict(self._active) if self._active else None
         if active and hasattr(self.channel, "simulate_ack"):
-            contacts = get_contacts()
-            self.channel.simulate_ack(active["id"], contacts[active["pos"]]["address"])
+            self.channel.simulate_ack(active["id"], active["contacts"][active["pos"]]["address"])
+        self._wake.set()
 
 
 def purge_expired(now: datetime | None = None) -> int:

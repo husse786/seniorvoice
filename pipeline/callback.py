@@ -7,8 +7,7 @@
   "nicht erreicht" (appointments.py). No alarm.
 - The senior can cancel by voice ("Rufen Sie mich nicht an").
 
-Open product question (proposal implemented): the callback time is the same
-time on the next day. Only the fact "yes, at time X" is stored, not what was
+Callback time: the same time on the next day (confirmed 14.11.2026). Only the fact "yes, at time X" is stored, not what was
 said (F1).
 """
 
@@ -87,11 +86,25 @@ def may_offer(now: datetime) -> bool:
 
 
 def callback_time(now: datetime) -> datetime:
-    """Proposal: same time tomorrow, rounded to the next 5 minutes."""
+    """Same time tomorrow, rounded to the next 5 minutes (confirmed)."""
     local = now.astimezone(LOCAL_TZ) + timedelta(days=1)
     minute = (local.minute // 5 + 1) * 5
     local = local.replace(second=0, microsecond=0) + timedelta(minutes=minute - local.minute)
     return local
+
+
+def reserve_offer(now: datetime | None = None) -> None:
+    """Count today's offer before asking, so a failed recording cannot repeat it."""
+    now = now or datetime.now(timezone.utc)
+    conn = _conn()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO callback_offers (asked_on, accepted) VALUES (?, 0)",
+            (_today_local(now),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def record_answer(answer: str, now: datetime | None = None) -> tuple[bool, str]:
@@ -136,7 +149,7 @@ def cancel_open_callbacks(now: datetime | None = None) -> int:
     try:
         deleted = conn.execute(
             "DELETE FROM appointments WHERE kind = 'rueckruf' AND id IN ("
-            " SELECT appointment_id FROM reminders WHERE status = 'geplant')"
+            " SELECT appointment_id FROM reminders WHERE status IN ('geplant', 'klingelt'))"
         ).rowcount
         conn.commit()
         return deleted

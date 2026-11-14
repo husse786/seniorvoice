@@ -179,3 +179,34 @@ def test_hang_announcement_does_not_block_core(env):
     assert time.monotonic() - t < 0.2
     time.sleep(1.2)
     assert said == [core_mod.HANG_MESSAGE]
+
+
+def test_help_sentences_jump_the_announcement_queue(env):
+    core_mod = env.load("core_service")
+    import threading
+    played, gate = [], threading.Event()
+
+    def speak(text):
+        if text == "first":
+            gate.wait(2)
+        played.append(text)
+    q = core_mod.AnnouncementQueue(speak)
+    q.say("first")                                  # being played
+    time.sleep(0.05)
+    q.say("reminder")
+    q.say_urgent("help")
+    gate.set()
+    for _ in range(100):
+        if len(played) == 3:
+            break
+        time.sleep(0.01)
+    assert played == ["first", "help", "reminder"]
+    assert q.say_and_wait("x") is True
+
+
+def test_failed_playback_reported_to_waiter(env):
+    core_mod = env.load("core_service")
+
+    def broken(text):
+        raise OSError("no audio")
+    assert core_mod.AnnouncementQueue(broken).say_and_wait("x") is False
