@@ -132,6 +132,7 @@ class GpioInput(InputSource):
     """
 
     POLL_SECONDS = 0.01
+    MAX_READ_FAILURES = 100      # about 1 s of failed reads -> give up, core exits
 
     def __init__(self, lgpio_module=None, chip: int | None = None,
                  hook_pin: int | None = None, offhook_level: int | None = None,
@@ -187,17 +188,28 @@ class GpioInput(InputSource):
         handle = self._open()
         stable = {pin: self._lgpio.gpio_read(handle, pin)
                   for pin in [self.hook_pin, *self.button_pins]}
-        if stable[self.hook_pin] == self.offhook_level:
-            events.put(InputEvent("hook_off"))
+        # Start as "on hook": a handset already lifted is reported after the
+        # normal debounce, so a glitch at start-up does not start a call
+        stable[self.hook_pin] = 1 - self.offhook_level
 
         def run():
             pending: dict = {}
+            failures = 0
             try:
                 while self.running:
                     try:
                         self.poll(handle, stable, pending, events)
+                        failures = 0
                     except Exception as e:
-                        log.error("GPIO read failed: %s", type(e).__name__)
+                        failures += 1
+                        if failures == 1:
+                            log.error("GPIO read failed: %s", type(e).__name__)
+                        if failures >= self.MAX_READ_FAILURES:
+                            # Hook and Help can no longer be read: let the core
+                            # exit so systemd restarts the whole device service
+                            log.critical("GPIO unreadable, stopping")
+                            events.put(InputEvent("input_failed"))
+                            return
                     self.sleep(self.POLL_SECONDS)
             finally:
                 try:
@@ -216,6 +228,7 @@ class AudioRinger(Ringer):
     def __init__(self, command: Callable[[], list[str] | None] | None = None):
         self._command = command or self._default_command
         self._stop = threading.Event()
+        self._paused = threading.Event()
         self._thread: threading.Thread | None = None
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
@@ -239,24 +252,48 @@ class AudioRinger(Ringer):
 
     def _loop(self) -> None:
         while not self._stop.is_set():
-            cmd = self._command()
-            if not cmd:
-                log.warning("No audio player for the ring tone")
-                return
+            if self._paused.is_set():
+                self._stop.wait(0.05)          # an announcement uses the speaker
+                continue
             try:
+                cmd = self._command()
+                if not cmd:
+                    log.warning("No audio player for the ring tone")
+                    return
                 with self._lock:
-                    if self._stop.is_set():
-                        return
+                    if self._stop.is_set() or self._paused.is_set():
+                        continue
                     self._proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                                                   stderr=subprocess.DEVNULL)
-                self._proc.wait()
+                code = self._proc.wait()
+                if code != 0 and not (self._stop.is_set() or self._paused.is_set()):
+                    log.error("Ring tone player exited with %d", code)
+                    self._stop.wait(1.0)
             except Exception as e:
                 log.error("Ring tone failed: %s", type(e).__name__)
                 self._stop.wait(1.0)
 
+    def _kill_player(self) -> None:
+        with self._lock:
+            proc = self._proc
+            if proc and proc.poll() is None:
+                proc.terminate()
+        if proc:
+            try:
+                proc.wait(timeout=2)
+            except Exception:
+                proc.kill()
+
+    def pause(self) -> None:
+        """Free the speaker for an announcement (Help goes first, A13)."""
+        self._paused.set()
+        self._kill_player()
+
+    def resume(self) -> None:
+        self._paused.clear()
+
     def stop(self) -> None:
         """Stops at once, also in the middle of a ring (handset lifted)."""
         self._stop.set()
-        with self._lock:
-            if self._proc and self._proc.poll() is None:
-                self._proc.terminate()
+        self._paused.clear()
+        self._kill_player()

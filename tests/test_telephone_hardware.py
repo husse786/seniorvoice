@@ -107,8 +107,82 @@ def test_handset_already_lifted_at_start(env):
                       button_pins=dict(PINS), sleep=lambda s: time.sleep(0.01))
     events = queue.Queue()
     gi.start(events)
-    gi.running = False
-    assert events.get(timeout=1) == hw.InputEvent("hook_off")
+    assert events.empty()                                 # not at once (debounce)
+    try:
+        assert events.get(timeout=1) == hw.InputEvent("hook_off")
+    finally:
+        gi.running = False
+
+
+def test_glitch_at_start_starts_no_call(env):
+    hw, gi, lg, clock, handle, stable = _gpio(env)
+    stable[17] = 0                                        # as start() sets it
+    events = queue.Queue()
+    lg.levels[17] = 1
+    _rounds(gi, handle, stable, clock, events, 10)        # 10 ms glitch
+    lg.levels[17] = 0
+    _rounds(gi, handle, stable, clock, events, 60)
+    assert events.empty()
+
+
+def test_unreadable_gpio_makes_core_exit(env):
+    hw = env.load("hardware")
+
+    class Broken(FakeLgpio):
+        reads = 0
+
+        def gpio_read(self, handle, pin):
+            Broken.reads += 1
+            if Broken.reads > 7:                          # after the start reads
+                raise OSError("gpio gone")
+            return 1
+    gi = hw.GpioInput(lgpio_module=Broken({}), chip=4, hook_pin=17, offhook_level=1,
+                      button_pins=dict(PINS), sleep=lambda s: None)
+    events = queue.Queue()
+    gi.start(events)
+    assert events.get(timeout=2) == hw.InputEvent("input_failed")
+    core_mod = env.load("core_service")
+    hw2 = __import__("hardware")
+
+    class Sup:
+        on_restart = None
+
+        def send(self, *a, **k):
+            return True
+
+        def check(self):
+            pass
+    core = core_mod.Core(Sup(), hw2.SimulatedRinger(), with_reminders=False)
+    core.handle(hw2.InputEvent("input_failed"))
+    assert core.failed and not core.running
+
+
+def test_configured_device_never_falls_back_to_default(env, monkeypatch):
+    monkeypatch.setenv("HANDSET_ALSA_DEVICE", "plughw:CARD=Device,DEV=0")
+    tts = env.load("tts")
+    monkeypatch.setattr(tts.shutil, "which", lambda name: "/usr/bin/paplay" if name == "paplay" else None)
+    from pathlib import Path
+    with pytest.raises(RuntimeError):
+        tts.player_command(Path("a.wav"))
+
+
+def test_announcement_pauses_ringing(env):
+    core_mod = env.load("core_service")
+    hw = __import__("hardware")
+    ringer = hw.AudioRinger(command=lambda: [sys.executable, "-c", "import time; time.sleep(30)"])
+    ringer.ring()
+    time.sleep(0.3)
+    seen = []
+
+    def speak(text):
+        proc = ringer._proc
+        seen.append(proc is None or proc.poll() is not None)   # ring player has ended
+    q = core_mod.AnnouncementQueue(speak, ringer=ringer)
+    assert q.say_and_wait("Hilfe") is True
+    assert seen == [True]
+    time.sleep(0.3)
+    assert ringer.ringing and ringer._proc.poll() is None       # ringing resumed
+    ringer.stop()
 
 
 def test_button_pin_config_is_checked(env):

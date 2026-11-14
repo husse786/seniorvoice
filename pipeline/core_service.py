@@ -187,6 +187,7 @@ class Core:
         self._call_lock = threading.Lock()
         self.tickers: list[Callable[[], None]] = [supervisor.check]
         self.running = True
+        self.failed = False
         supervisor.on_restart = self._on_dialog_restart
         supervisor.on_ready = self._on_dialog_ready
         self.reminders = None
@@ -224,6 +225,10 @@ class Core:
 
     def handle(self, event: InputEvent) -> None:
         if event.kind == "quit":
+            self.running = False
+        elif event.kind == "input_failed":
+            log.critical("Input hardware failed, core exits for a restart")
+            self.failed = True
             self.running = False
         elif event.kind == "hook_off":
             self.in_call = True
@@ -285,8 +290,9 @@ class AnnouncementQueue:
     handset, the core over the room speaker (A9, A13).
     """
 
-    def __init__(self, speak: Callable[[str], None]):
+    def __init__(self, speak: Callable[[str], None], ringer=None):
         self._speak = speak
+        self._ringer = ringer          # paused while speaking: same speaker device
         self._queue: "queue.PriorityQueue" = queue.PriorityQueue()
         self._seq = itertools.count()
         threading.Thread(target=self._run, name="announce", daemon=True).start()
@@ -308,11 +314,17 @@ class AnnouncementQueue:
         while True:
             _prio, _seq, text, done = self._queue.get()
             ok = False
+            pause = getattr(self._ringer, "pause", None)
             try:
+                if pause:
+                    pause()
                 self._speak(text)
                 ok = True
             except Exception as e:
                 log.error("Announcement failed: %s", type(e).__name__)
+            finally:
+                if pause:
+                    self._ringer.resume()
             if done is not None:
                 done["ok"] = ok
                 done["event"].set()
@@ -345,13 +357,13 @@ def main() -> None:
     from channels import channel_from_env
     from help_alert import HelpService
     # Help speaks through a queue: the core loop never waits for audio
-    voice = AnnouncementQueue(_speak)
+    ringer = AudioRinger() if args.input == "gpio" else SimulatedRinger()
+    voice = AnnouncementQueue(_speak, ringer=ringer)
     help_service = HelpService(channel_from_env(), announce=voice.say_urgent,
                                senior_name=os.getenv("SENIOR_NAME", ""))
     help_service.run_worker()
     from family import run_sender
     run_sender(help_service.channel)
-    ringer = AudioRinger() if args.input == "gpio" else SimulatedRinger()
     core = Core(DialogSupervisor(), ringer, help_handler=help_service,
                 announce=voice.say_and_wait)
     if args.input == "gpio":
@@ -362,6 +374,8 @@ def main() -> None:
     log.info("Core started")
     core.run()
     log.info("Core stopped")
+    if core.failed:
+        sys.exit(1)   # systemd restarts the service
 
 
 if __name__ == "__main__":
