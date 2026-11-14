@@ -1,4 +1,4 @@
-# Geräte-Schnittstelle für das Portal (PR 10)
+# Geräte-Schnittstelle für das Portal (PR 10, Rat-Infos ab PR 9)
 
 Status: Entwurf, im Code getestet (Tests mit echtem HTTP auf dem Rechner), am Gerät und mit einem Portal noch nicht geprüft.
 
@@ -57,6 +57,10 @@ Jede Anfrage braucht `Authorization: Bearer <Gerätetoken>` (das Portal) und `X-
 | `PUT /v1/appointments/<id>` | nur wer eingetragen hat | `{"title"?, "due_local"?, "pre_minutes"?}`. Nur Text geändert: Erinnerungen behalten ihren Status. Neue Zeit: Erinnerungen werden neu geplant, die gewählte Vorerinnerung bleibt |
 | `DELETE /v1/appointments/<id>` | nur wer eingetragen hat | löscht sofort (secure_delete) |
 | `GET /v1/help` | Angehörige, Spitex mit `--help-visible` | Help-Verlauf: Zeit, Status, zugestellt, quittiert von |
+| `GET /v1/advice` | Angehörige, Spitex | Infos für den Rat-Knopf (B2): `topic`, `text`, `created_by`, `own` |
+| `POST /v1/advice` | Angehörige, Spitex | `{"topic" (≤ 80 Zeichen), "text" (≤ 600)}` → `201 {"id"}`; höchstens 40 Einträge. Der Text wird am Gerät wörtlich vorgelesen, mit «hat <Name> hinterlegt» |
+| `PUT /v1/advice/<id>` | nur wer eingetragen hat | `{"topic"?, "text"?}` |
+| `DELETE /v1/advice/<id>` | nur wer eingetragen hat | löscht sofort |
 | `GET /v1/audit` | alle | eigene Protokolleinträge; Admin: alle |
 
 Fehler: `401` falscher Token, `403` keine Freigabe oder keine Berechtigung, `404` unbekannt, `400` ungültige Eingabe (auch: Zeit in der Vergangenheit, mehr als 2 Jahre voraus oder wegen Zeitumstellung nicht existent). Nach einem Fehler schliesst das Gerät die Verbindung.

@@ -43,7 +43,7 @@ LLM_HANG_TIMEOUT = float(os.getenv("CORE_LLM_HANG_TIMEOUT", "90"))
 RESTART_BACKOFF_MAX = 60.0
 
 # Buttons whose answer is spoken in the handset (A9): lift it first
-HANDSET_BUTTONS = ("familie", "heute", "kalender")
+HANDSET_BUTTONS = ("familie", "heute", "kalender", "rat")
 LIFT_HANDSET = "Bitte heben Sie zuerst den Hörer ab und drücken Sie dann den Knopf nochmals."
 
 HANG_MESSAGE = (

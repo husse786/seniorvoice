@@ -29,6 +29,10 @@ Requests: header "Authorization: Bearer <device token>" (the portal) and
     PUT    /v1/appointments/<id>       only who entered it: {"title", "due_local", "pre_minutes"}
     DELETE /v1/appointments/<id>       only who entered it
     GET    /v1/help                    relatives, Spitex with Help visibility
+    GET    /v1/advice                  relatives, Spitex: information for the Rat button (B2)
+    POST   /v1/advice                  relatives, Spitex: {"topic", "text"}
+    PUT    /v1/advice/<id>             only who entered it: {"topic", "text"}
+    DELETE /v1/advice/<id>             only who entered it
     GET    /v1/audit                   own entries; admin: all
 """
 
@@ -45,6 +49,7 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
+import advice
 import appointments
 from config import (AUDIT_RETENTION_DAYS, DEVICE_API_HOST, DEVICE_API_PORT,
                     DEVICE_API_TOKEN_SHA256)
@@ -275,6 +280,7 @@ def _parse_pre(value) -> int | None:
 # --- HTTP ---
 
 _APPT_ID = re.compile(r"^/v1/appointments/(\d{1,12})$")
+_ADVICE_ID = re.compile(r"^/v1/advice/(\d{1,12})$")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -339,8 +345,12 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         match = _APPT_ID.match(path)
         route = "/v1/appointments/{id}" if match else path
+        if match is None:
+            match = _ADVICE_ID.match(path)
+            route = "/v1/advice/{id}" if match else path
         known = route in ("/v1/status", "/v1/audit", "/v1/appointments",
-                          "/v1/appointments/{id}", "/v1/help")
+                          "/v1/appointments/{id}", "/v1/help",
+                          "/v1/advice", "/v1/advice/{id}")
         action = f"{method} {route if known else '(unknown)'}"
         target = match.group(1) if match else None
         person_id = self.headers.get("X-Person-Id", "").strip()
@@ -381,7 +391,9 @@ class Handler(BaseHTTPRequestHandler):
             return 200, {"entries": list_audit(None if role == "admin" else person["person_id"])}
         known = {("GET", "/v1/appointments"), ("POST", "/v1/appointments"),
                  ("PUT", "/v1/appointments/{id}"), ("DELETE", "/v1/appointments/{id}"),
-                 ("GET", "/v1/help")}
+                 ("GET", "/v1/help"),
+                 ("GET", "/v1/advice"), ("POST", "/v1/advice"),
+                 ("PUT", "/v1/advice/{id}"), ("DELETE", "/v1/advice/{id}")}
         if (method, route) not in known:
             raise ApiError(404, "not found")
         if role not in CONTENT_ROLES:
@@ -390,6 +402,8 @@ class Handler(BaseHTTPRequestHandler):
             if not person["help_visible"]:
                 raise ApiError(403, "Help history not shared with this person")
             return 200, {"alerts": _help_view()}
+        if route.startswith("/v1/advice"):
+            return self._advice(method, target, person)
         if method == "GET":
             items = [_appointment_view(a, person["person_id"])
                      for a in appointments.list_appointments() if a["kind"] in PORTAL_KINDS]
@@ -419,6 +433,42 @@ class Handler(BaseHTTPRequestHandler):
                                                _parse_pre(data.get("pre_minutes"))):
             raise ApiError(404, "not found")
         return 200, {"id": existing["id"]}
+
+
+    def _advice(self, method: str, target: str | None, person: dict):
+        """Information for the Rat button (B2): read out verbatim on the device."""
+        try:
+            if method == "GET":
+                return 200, {"advice": [_advice_view(i, person["person_id"])
+                                        for i in advice.list_items()]}
+            if method == "POST":
+                data = self._body()
+                item_id = advice.add_item(data.get("topic"), data.get("text"),
+                                          person["name"], created_by_id=person["person_id"])
+                return 201, {"id": item_id}
+            existing = advice.get_item(int(target))
+            if existing is None:
+                raise ApiError(404, "not found")
+            if existing["created_by_id"] != person["person_id"]:
+                raise ApiError(403, "only the person who entered it may change it")
+            if method == "DELETE":
+                advice.delete_item(existing["id"])
+                return 200, {"deleted": existing["id"]}
+            data = self._body()
+            for key in ("topic", "text"):
+                if key in data and not isinstance(data[key], str):
+                    raise ApiError(400, f"{key} must be text")
+            if not advice.update_item(existing["id"], data.get("topic"), data.get("text")):
+                raise ApiError(404, "not found")
+            return 200, {"id": existing["id"]}
+        except advice.AdviceError as e:
+            raise ApiError(400, str(e)) from None
+
+
+def _advice_view(item: dict, person_id: str) -> dict:
+    return {"id": item["id"], "topic": item["topic"], "text": item["text"],
+            "created_by": item["created_by"], "own": item["created_by_id"] == person_id,
+            "updated_at": item["updated_at"]}
 
 
 def _check_host(host: str) -> None:
