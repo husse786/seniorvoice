@@ -325,3 +325,60 @@ def purge_expired(now: datetime | None = None) -> int:
     if deleted:
         log.info("Purge: deleted %d expired appointment(s)", deleted)
     return deleted
+
+
+# --- Buttons "Heute" and "Kalender" (B3): fixed sentences, no LLM ---
+
+_WEEKDAYS = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
+_MONTHS = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August",
+           "September", "Oktober", "November", "Dezember")
+
+
+def _day_name(d: datetime) -> str:
+    return f"{_WEEKDAYS[d.weekday()]}, der {d.day}. {_MONTHS[d.month - 1]}"
+
+
+def _hhmm(d: datetime) -> str:
+    return f"{d.hour}:{d.minute:02d}" if d.minute else f"{d.hour}"
+
+
+def _between(start: datetime, end: datetime, kinds: tuple[str, ...]) -> list[tuple[datetime, str, str]]:
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT due_at, kind, title FROM appointments WHERE due_at >= ? AND due_at < ? "
+            f"AND kind IN ({','.join('?' * len(kinds))}) ORDER BY due_at",
+            (_iso(start), _iso(end), *kinds),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [(_parse(d).astimezone(LOCAL_TZ), k, t) for d, k, t in rows]
+
+
+def today_text(now: datetime | None = None) -> str:
+    """Heute: date, today's appointments and medication (B3)."""
+    local = (now or _now_utc()).astimezone(LOCAL_TZ)
+    start = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    items = _between(start, start + timedelta(days=1), ("termin", "medikament"))
+    parts = [f"Heute ist {_day_name(local)}."]
+    termine = [f"um {_hhmm(d)} Uhr {t}" for d, k, t in items if k == "termin"]
+    meds = [f"um {_hhmm(d)} Uhr: {t}" for d, k, t in items if k == "medikament"]
+    parts.append("Heute haben Sie " + ", ".join(termine) + "." if termine
+                 else "Heute haben Sie keine Termine.")
+    if meds:
+        parts.append("Ihre Medikamente: " + "; ".join(meds) + ".")
+    return " ".join(parts)
+
+
+def week_text(now: datetime | None = None) -> str:
+    """Kalender: appointments of the next 7 days (B3), without medication."""
+    local = (now or _now_utc()).astimezone(LOCAL_TZ)
+    items = _between(local, local + timedelta(days=7), ("termin",))
+    if not items:
+        return "In den nächsten sieben Tagen haben Sie keine Termine."
+    lines = []
+    for d, _k, t in items:
+        day = "heute" if d.date() == local.date() else (
+            "morgen" if d.date() == (local + timedelta(days=1)).date() else f"am {_day_name(d)}")
+        lines.append(f"{day} um {_hhmm(d)} Uhr {t}")
+    return "In den nächsten sieben Tagen haben Sie: " + "; ".join(lines) + "."

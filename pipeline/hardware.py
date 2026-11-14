@@ -6,13 +6,17 @@ the handset; the speaker only rings, plus the Help confirmation, A13).
 
 Two implementations:
 - Simulated: keyboard commands on stdin (development and tests without a Pi).
-- GPIO: added in PR 7 once the phone hardware is wired.
+- GPIO (PR 7): hook switch and six buttons on the Pi 5 via lgpio; the ringer
+  plays a ring tone on the room speaker.
 """
 
 import queue
+import subprocess
 import sys
 import threading
+import time
 from dataclasses import dataclass
+from typing import Callable
 
 from logging_config import get_logger
 
@@ -100,3 +104,159 @@ class KeyboardInput(InputSource):
                     return
             events.put(InputEvent("quit"))
         threading.Thread(target=run, name="keyboard", daemon=True).start()
+
+
+def parse_button_pins(spec: str) -> dict[int, str]:
+    """"sprechen:5,heute:6,..." -> {5: "sprechen", 6: "heute", ...}."""
+    pins: dict[int, str] = {}
+    for part in filter(None, (p.strip() for p in spec.split(","))):
+        name, _, pin = part.partition(":")
+        name = name.strip().lower()
+        if name not in BUTTONS or not pin.strip().isdigit():
+            raise ValueError(f"invalid button pin entry: {part!r}")
+        if int(pin) in pins:
+            raise ValueError(f"GPIO {pin} used twice")
+        pins[int(pin)] = name
+    missing = set(BUTTONS) - set(pins.values())
+    if missing:
+        raise ValueError(f"no GPIO for button(s): {sorted(missing)}")
+    return pins
+
+
+class GpioInput(InputSource):
+    """Hook switch and buttons on the Pi 5 (lgpio), polled every 10 ms.
+
+    A level must stay stable for GPIO_DEBOUNCE_MS before it counts, so
+    contact bounce of the hook switch or a button never produces double
+    events. If the handset is already lifted at start, hook_off is sent.
+    """
+
+    POLL_SECONDS = 0.01
+
+    def __init__(self, lgpio_module=None, chip: int | None = None,
+                 hook_pin: int | None = None, offhook_level: int | None = None,
+                 button_pins: dict[int, str] | None = None,
+                 debounce_ms: int | None = None,
+                 sleep: Callable[[float], None] = time.sleep,
+                 monotonic: Callable[[], float] = time.monotonic):
+        import config
+        self._lgpio = lgpio_module
+        self.chip = config.GPIO_CHIP if chip is None else chip
+        self.hook_pin = config.HOOK_GPIO_PIN if hook_pin is None else hook_pin
+        self.offhook_level = config.HOOK_OFFHOOK_LEVEL if offhook_level is None else offhook_level
+        self.button_pins = button_pins or parse_button_pins(config.BUTTON_PINS)
+        if self.hook_pin in self.button_pins:
+            raise ValueError(f"GPIO {self.hook_pin} is used for the hook and a button")
+        self.debounce = (config.GPIO_DEBOUNCE_MS if debounce_ms is None else debounce_ms) / 1000
+        self.sleep = sleep
+        self.monotonic = monotonic
+        self.running = True
+
+    def _open(self):
+        lg = self._lgpio
+        if lg is None:
+            import lgpio as lg   # Raspberry Pi OS package
+            self._lgpio = lg
+        handle = lg.gpiochip_open(self.chip)
+        for pin in [self.hook_pin, *self.button_pins]:
+            lg.gpio_claim_input(handle, pin, lg.SET_PULL_UP)
+        return handle
+
+    def poll(self, handle, stable: dict, pending: dict, events) -> None:
+        """One polling round (separate for tests)."""
+        now = self.monotonic()
+        for pin in [self.hook_pin, *self.button_pins]:
+            level = self._lgpio.gpio_read(handle, pin)
+            if level == stable[pin]:
+                pending.pop(pin, None)
+                continue
+            since = pending.setdefault(pin, (level, now))
+            if since[0] != level:
+                pending[pin] = (level, now)
+                continue
+            if now - since[1] < self.debounce:
+                continue
+            stable[pin] = level
+            pending.pop(pin, None)
+            if pin == self.hook_pin:
+                events.put(InputEvent("hook_off" if level == self.offhook_level else "hook_on"))
+            elif level == 0:                       # pull-up: pressed = LOW
+                events.put(InputEvent("button", self.button_pins[pin]))
+
+    def start(self, events: "queue.Queue[InputEvent]") -> None:
+        handle = self._open()
+        stable = {pin: self._lgpio.gpio_read(handle, pin)
+                  for pin in [self.hook_pin, *self.button_pins]}
+        if stable[self.hook_pin] == self.offhook_level:
+            events.put(InputEvent("hook_off"))
+
+        def run():
+            pending: dict = {}
+            try:
+                while self.running:
+                    try:
+                        self.poll(handle, stable, pending, events)
+                    except Exception as e:
+                        log.error("GPIO read failed: %s", type(e).__name__)
+                    self.sleep(self.POLL_SECONDS)
+            finally:
+                try:
+                    self._lgpio.gpiochip_close(handle)
+                except Exception:
+                    pass
+        threading.Thread(target=run, name="gpio", daemon=True).start()
+        log.info("GPIO input on chip %d: hook GPIO%d, buttons %s",
+                 self.chip, self.hook_pin,
+                 ", ".join(f"{n}=GPIO{p}" for p, n in sorted(self.button_pins.items())))
+
+
+class AudioRinger(Ringer):
+    """Rings over the room speaker (A5, A9) until stop() is called."""
+
+    def __init__(self, command: Callable[[], list[str] | None] | None = None):
+        self._command = command or self._default_command
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._proc: subprocess.Popen | None = None
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _default_command() -> list[str] | None:
+        from sounds import get_path
+        from tts import player_command
+        return player_command(get_path("ring"), output="speaker")
+
+    @property
+    def ringing(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def ring(self) -> None:
+        if self.ringing:
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._loop, name="ringer", daemon=True)
+        self._thread.start()
+
+    def _loop(self) -> None:
+        while not self._stop.is_set():
+            cmd = self._command()
+            if not cmd:
+                log.warning("No audio player for the ring tone")
+                return
+            try:
+                with self._lock:
+                    if self._stop.is_set():
+                        return
+                    self._proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                                                  stderr=subprocess.DEVNULL)
+                self._proc.wait()
+            except Exception as e:
+                log.error("Ring tone failed: %s", type(e).__name__)
+                self._stop.wait(1.0)
+
+    def stop(self) -> None:
+        """Stops at once, also in the middle of a ring (handset lifted)."""
+        self._stop.set()
+        with self._lock:
+            if self._proc and self._proc.poll() is None:
+                self._proc.terminate()

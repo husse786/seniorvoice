@@ -19,6 +19,10 @@ import callback
 setup_logging()
 log = get_logger("dialog")
 
+# Buttons answered in the dialog during a call (B3). "sprechen": the call is
+# already a conversation; "rat" follows in PR 9.
+SPOKEN_BUTTONS = ("familie", "heute", "kalender")
+
 LLM_FAILED_REPLY = (
     "Entschuldigung, ich kann gerade nicht antworten. "
     "Bitte versuchen Sie es gleich nochmals."
@@ -50,7 +54,7 @@ class DialogService:
         elif kind == "call_end":
             self.call_active.clear()
             self.call_changed.set()
-        elif kind == "button":
+        elif kind == "button" and msg.get("name") in SPOKEN_BUTTONS:
             self.pending_button = msg.get("name")
         elif kind == "closed":
             # Core is gone: stop, systemd/core will start us again
@@ -134,6 +138,16 @@ class DialogService:
             speak(family.NOT_SENT)
         self.state("idle")
 
+    def read_calendar(self, button: str) -> None:
+        """Heute / Kalender (B3): fixed sentences from the device, no LLM."""
+        import appointments
+        from tts import speak
+        text = appointments.today_text() if button == "heute" else appointments.week_text()
+        if self.active():
+            self.state("speaking")
+            speak(text)
+        self.state("idle")
+
     def run_call(self) -> None:
         """One call: turns until the handset is hung up."""
         from config import MEMORY_TIMEOUT
@@ -155,6 +169,9 @@ class DialogService:
                 button, self.pending_button = self.pending_button, None
                 if button == "familie":
                     self.family_message()
+                    continue
+                if button in ("heute", "kalender"):
+                    self.read_calendar(button)
                     continue
                 run_pipeline.last_text = ""
                 history, pre_reset = run_pipeline(

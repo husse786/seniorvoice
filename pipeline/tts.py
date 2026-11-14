@@ -1,11 +1,11 @@
-"""Text-to-Speech using Piper TTS, with playback via PulseAudio (Bluetooth speaker)."""
+"""Text-to-Speech using Piper TTS; playback on the handset or the room speaker."""
 
 import os
 import subprocess
 import shutil
 import tempfile
 from pathlib import Path
-from config import PIPER_VOICE, OUTPUT_DIR
+from config import PIPER_VOICE, OUTPUT_DIR, HANDSET_ALSA_DEVICE, SPEAKER_ALSA_DEVICE
 from logging_config import get_logger, get_content_logger
 
 log = get_logger("tts")
@@ -50,28 +50,39 @@ def synthesize(text: str) -> Path:
     return output_path
 
 
-def play(wav_path: Path) -> None:
-    """Play a WAV file through the default PulseAudio sink (Bluetooth speaker)."""
-    paplay = shutil.which("paplay")
-    aplay = shutil.which("aplay")
+def player_command(wav_path: Path, output: str = "handset") -> list[str] | None:
+    """Command that plays wav_path on the handset or the room speaker (A9).
 
+    With HANDSET_ALSA_DEVICE / SPEAKER_ALSA_DEVICE set, aplay -D is used so
+    the two outputs never mix; otherwise the system default (FS26 setup).
+    """
+    device = SPEAKER_ALSA_DEVICE if output == "speaker" else HANDSET_ALSA_DEVICE
+    aplay = shutil.which("aplay")
+    if device and aplay:
+        return [aplay, "-q", "-D", device, str(wav_path)]
+    paplay = shutil.which("paplay")
     if paplay:
-        cmd = [paplay, str(wav_path)]
-    elif aplay:
-        cmd = [aplay, str(wav_path)]
-    else:
+        return [paplay, str(wav_path)]
+    if aplay:
+        return [aplay, "-q", str(wav_path)]
+    return None
+
+
+def play(wav_path: Path, output: str = "handset") -> None:
+    """Play a WAV file on the handset (default) or the room speaker."""
+    cmd = player_command(wav_path, output)
+    if cmd is None:
         log.warning("No audio player found. WAV saved at: %s", wav_path)
         return
-
-    log.debug("Playing on speaker...")
+    log.debug("Playing on %s...", output)
     subprocess.run(cmd, timeout=30, check=True)
     log.debug("Playback done")
 
 
-def speak(text: str) -> None:
+def speak(text: str, output: str = "handset") -> None:
     """Synthesize and play text, then delete the audio file (decision A8)."""
     wav_path = synthesize(text)
     try:
-        play(wav_path)
+        play(wav_path, output)
     finally:
         wav_path.unlink(missing_ok=True)

@@ -38,6 +38,8 @@ Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 und PR 2 gilt
 
 **Help und Familie (ab PR 6, A3, A4, A13–A15):** Kontaktpersonen in Reihenfolge eintragen (nur mit Einwilligung): `python contacts_cli.py set "Sandra|Tochter|<chat-id>" "Spitex|Spitex|<chat-id>"`. **Hilfe** benachrichtigt die erste Person (kein Notruf, das Gerät sagt «Im Notfall rufen Sie bitte 144 an»). Ohne Reaktion nach 10 Min. die nächste; reagiert niemand, sagt das Gerät «Bitte rufen Sie 144 an». **Familie**: Nachricht sprechen, Gerät liest vor, gesendet wird nur nach «Ja». Kanal: `CHANNEL=console` (Test, Standard) oder `CHANNEL=telegram` (Knopf «Ich kümmere mich»); Entscheid F4 offen. In der Tastatur-Simulation steht `ok` für «Kontaktperson quittiert».
 
+**Telefon-Hardware und Autostart (ab PR 7, A9, A12, B3):** `python core_service.py --input gpio` liest Gabel und die sechs Knöpfe über GPIO (Pins in `.env`, siehe `.env.example`; Gabel wie in `docs/how-to_analog-telephone.md`). Gespräch über den Hörer (`HANDSET_ALSA_DEVICE`, Mikrofon `AUDIO_DEVICE_NAME`), Klingeln und Help-Bestätigung über den Raumlautsprecher (`SPEAKER_ALSA_DEVICE`). **Heute** liest Datum, heutige Termine und Medikamente vor, **Kalender** die Termine der nächsten 7 Tage (feste Sätze, kein LLM); ohne abgehobenen Hörer bittet das Gerät, zuerst abzuheben. Autostart: `sudo cp deploy/seniorvoice.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now seniorvoice` (Benutzer und Pfade in der Datei ggf. anpassen); Logs mit `journalctl -u seniorvoice -f`.
+
 Alle Einstellungen: [`.env.example`](.env.example). Tests: `pip install -r requirements-dev.txt && pytest`.
 
 ---
