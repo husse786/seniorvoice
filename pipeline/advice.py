@@ -7,6 +7,13 @@ enter information (topic + text), for example the Spitex phone number or
 verbatim, the same way as medication reminders. If nothing entered fits,
 it says "Fragen Sie Ihre Spitex oder Ihre Ärztin."
 
+T12 (team, 14.11.2026): if the question hints at an emergency (chest
+pain, breathlessness, a fall, unconsciousness ...), the device points to
+the Help button and 144 instead. This is decided by a fixed word list
+before the language model is asked, so it never depends on the model.
+The list is deliberately broad: a needless hint costs little, a missed
+emergency a lot.
+
 Why the language model never speaks here: a 1B model cannot be trusted to
 stay within a prompt instruction about medical topics. In Rat mode it only
 chooses which entered topic fits the question (a number). Every sentence
@@ -42,6 +49,32 @@ HEALTH_QUESTION_TERMS = (
     "medika", "tablett", "pille", "tropfen", "dosis", "insulin", "spritz", "salbe",
     "schmerz", "weh", "blutdruck", "blutzucker", "zucker", "fieber", "krank", "symptom",
     "nebenwirk", "absetzen", "weglassen", "doppelt", "mehr nehmen", "schwindel",
+)
+
+EMERGENCY = ("Wenn es ein Notfall ist, drücken Sie sofort den Hilfe-Knopf "
+             "oder rufen Sie 144 an.")
+
+# Lower case, umlauts folded (ae, oe, ue). Substrings, so "brustschmerzen"
+# and "schmerzen in der brust" are both caught by "brust".
+EMERGENCY_TERMS = (
+    # chest, heart
+    "brust", "herzinfarkt", "infarkt", "herzrasen", "herzstolpern", "herzschmerz",
+    "herzstechen", "herz tut weh", "herz rast",
+    # breathing
+    "atem", "atme", "luft", "erstick",
+    # falls
+    "sturz", "gestuerzt", "hingefallen", "umgefallen", "hinfallen", "gefallen",
+    "kann nicht aufstehen", "komme nicht hoch", "nicht mehr aufstehen", "liege am boden",
+    # consciousness, stroke
+    "bewusstlos", "ohnmacht", "ohnmaechtig", "wird schwarz", "schwarz vor augen",
+    "schlaganfall", "hirnschlag", "laehm", "gelaehmt", "kann nicht sprechen",
+    "kann nicht mehr sprechen", "gesicht haengt", "taub", "verwirrt",
+    # bleeding, poisoning, other
+    "blutet", "blutung", "viel blut", "erbricht blut", "blut erbrochen",
+    "vergift", "zu viele tabletten", "zu viel genommen", "krampf", "anfall",
+    "starke schmerzen", "furchtbare schmerzen", "unertraeglich",
+    "notfall", "notarzt", "krankenwagen", "ambulanz", "rettung", "144",
+    "hilfe", "sterbe", "sterben", "nicht mehr leben", "umbringen", "suizid",
 )
 
 MAX_TOPIC = 80
@@ -255,6 +288,27 @@ def find_item(question: str, items: list[dict] | None = None, complete=None) -> 
 def is_health_question(question: str) -> bool:
     text = question.lower()
     return any(term in text for term in HEALTH_QUESTION_TERMS)
+
+
+def _fold(text: str) -> str:
+    text = unicodedata.normalize("NFC", text.lower()).translate(_FOLD)
+    return " ".join(re.findall(r"[a-z0-9]+", text))
+
+
+def is_emergency(question: str) -> bool:
+    text = _fold(question)
+    return any(term in text for term in EMERGENCY_TERMS)
+
+
+def reply_for(question: str, complete=None) -> str:
+    """What the device says to a Rat question.
+
+    The emergency check comes first and uses only the word list (T12);
+    the model is then not asked at all.
+    """
+    if is_emergency(question):
+        return EMERGENCY
+    return answer_for(find_item(question, complete=complete), question)
 
 
 def answer_for(item: dict | None, question: str = "") -> str:

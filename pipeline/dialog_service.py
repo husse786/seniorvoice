@@ -174,7 +174,7 @@ class DialogService:
             self.state("idle")
             return
         self.state("thinking")
-        answer = advice.answer_for(advice.find_item(question), question)
+        answer = advice.reply_for(question)
         if self.active():
             self.state("speaking")
             speak(answer)

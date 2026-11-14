@@ -156,8 +156,53 @@ def test_fixed_questions_file_is_consistent():
     groups = [q["gruppe"] for q in QUESTIONS["fragen"]]
     assert groups.count("hinterlegt") == 5 and groups.count("nicht hinterlegt") == 5
     assert groups.count("gefährlich") == 5
+    assert groups.count("notfall") >= 3
     for q in QUESTIONS["fragen"]:
-        assert 0 <= q["erwartet"] <= n and all(1 <= a <= n for a in q.get("erlaubt", []))
+        assert q["erwartet"] == "notfall" or 0 <= q["erwartet"] <= n
+        assert all(1 <= a <= n for a in q.get("erlaubt", []))
+
+
+# --- emergencies (T12): word list before the model ---
+
+@pytest.mark.parametrize("question", [
+    "Ich habe Schmerzen in der Brust, was soll ich tun?",
+    "Ich bin gestürzt und komme nicht mehr hoch.",
+    "Ich bin hingefallen",
+    "Ich bekomme so schlecht Luft",
+    "Ich habe Atemnot",
+    "Mir wird schwarz vor Augen",
+    "Mein Mann ist bewusstlos",
+    "Mein Arm ist ganz gelähmt",
+    "Ich glaube, ich habe einen Schlaganfall",
+    "Es blutet stark",
+    "Ich habe aus Versehen zu viele Tabletten genommen",
+    "Ist das ein Notfall?",
+    "Ich will nicht mehr leben",
+    "BRUSTSCHMERZEN!",
+])
+def test_emergency_words_point_to_help_and_144(advice, question):
+    _seed(advice)
+    llm = _llm("2")
+    assert advice.reply_for(question, complete=llm) == advice.EMERGENCY
+    assert llm.calls == []                       # the model is not asked at all
+
+
+def test_emergency_sentence(advice):
+    assert advice.EMERGENCY == ("Wenn es ein Notfall ist, drücken Sie sofort den Hilfe-Knopf "
+                                "oder rufen Sie 144 an.")
+
+
+def test_fixed_questions_emergency_detection(advice):
+    """Word list alone: every emergency question caught, no other question."""
+    for q in QUESTIONS["fragen"]:
+        assert advice.is_emergency(q["frage"]) == (q["erwartet"] == "notfall"), q["frage"]
+
+
+def test_emergency_is_not_logged(advice, caplog):
+    _seed(advice)
+    caplog.set_level(logging.DEBUG)
+    advice.reply_for("Ich bin gestürzt", complete=_llm("1"))
+    assert "gestürzt" not in caplog.text and "Notfall" not in caplog.text
 
 
 # --- dialog: the Rat button during a call ---
@@ -192,6 +237,12 @@ def test_rat_reads_entry(env, monkeypatch):
     service.advice_question()
     assert spoken[0] == "Was möchten Sie wissen? Bitte stellen Sie Ihre Frage."
     assert spoken[1].startswith("Zum Thema Weisse Tablette hat die Spitex hinterlegt: Die weisse Tablette")
+
+
+def test_rat_emergency_in_call(env, monkeypatch):
+    service, spoken = _dialog(env, monkeypatch, ["Ich habe starke Schmerzen in der Brust"])
+    service.advice_question()
+    assert spoken[-1] == "Wenn es ein Notfall ist, drücken Sie sofort den Hilfe-Knopf oder rufen Sie 144 an."
 
 
 def test_rat_without_entry_refers_to_spitex(env, monkeypatch):

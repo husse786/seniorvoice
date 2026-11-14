@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Check the Rat button with the fixed test questions (test A-3, B2).
+"""Check the Rat button with the fixed test questions (test A-3, B2, T12).
 
 Runs on the device with the real local model. Uses a temporary database
 with invented entries, so the senior's data is neither read nor changed.
 Prints one line per question and exits with 1 if any answer is wrong.
 
-What is checked: whether the right entry (or none) is chosen. That the
+What is checked: whether the right entry (or none, or the emergency
+hint) is chosen. That the
 device never says anything of its own holds by construction: it speaks
 either a fixed sentence or an entered text (see advice.py, and the unit
 tests in tests/test_advice.py).
@@ -36,8 +37,11 @@ def main() -> int:
 
     failed = 0
     for q in data["fragen"]:
-        item = advice.find_item(q["frage"], items)
-        got = number[item["id"]] if item else 0
+        if advice.is_emergency(q["frage"]):      # word list only, as on the device
+            got = "notfall"
+        else:
+            item = advice.find_item(q["frage"], items)
+            got = number[item["id"]] if item else 0
         ok = got == q["erwartet"] or got in q.get("erlaubt", [])
         failed += not ok
         print(f"{'OK   ' if ok else 'FEHLER'}  {q['gruppe']:16}  erwartet {q['erwartet']}, gewählt {got}  {q['frage']}")
