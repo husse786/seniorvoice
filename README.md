@@ -34,6 +34,8 @@ Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 und PR 2 gilt
 
 **Termine und Erinnerungen (ab PR 4):** bis das Portal da ist, per Kommandozeile: `python appointments_cli.py add "Arzttermin bei Dr. Meier" "2026-11-20 14:00" --by Spitex` bzw. `--kind medikament` für Medikamente (Text wird wörtlich vorgelesen); `python appointments_cli.py list` zeigt den Status (geplant, klingelt, bestaetigt, verpasst).
 
+**Rückruf (ab PR 5, A7):** Verabschiedet sich der Senior («tschüss», «auf Wiederhören»), fragt das Gerät höchstens einmal pro Tag «Darf ich Sie morgen um … Uhr wieder anrufen?». Nur ein klares «Ja» zählt. Der Rückruf klingelt wie eine Erinnerung, ein zweiter Versuch nach 10 Min., dann «nicht erreicht». «Rufen Sie mich nicht an» sagt ihn ab.
+
 Alle Einstellungen: [`.env.example`](.env.example). Tests: `pip install -r requirements-dev.txt && pytest`.
 
 ---

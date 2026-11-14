@@ -14,6 +14,7 @@ import time
 
 from logging_config import setup_logging, get_logger
 from bus import Bus
+import callback
 
 setup_logging()
 log = get_logger("dialog")
@@ -58,6 +59,33 @@ class DialogService:
 
     # --- conversation ---
 
+    def intercept(self, text: str) -> str | None:
+        """Commands answered without the LLM."""
+        if callback.is_cancel_request(text):
+            callback.cancel_open_callbacks()
+            return callback.CANCELLED
+        return None
+
+    def offer_callback(self) -> None:
+        """A7: at most once a day, only a clear yes counts."""
+        from datetime import datetime, timezone
+        from audio_capture import record_until_silence
+        from stt import transcribe
+        from tts import speak
+
+        now = datetime.now(timezone.utc)
+        if not self.call_active.is_set() or not callback.may_offer(now):
+            return
+        self.state("speaking")
+        speak(callback.offer_question(now))
+        self.state("listening")
+        answer = transcribe(record_until_silence()) if self.call_active.is_set() else ""
+        _accepted, reply = callback.record_answer(answer, now)
+        self.state("speaking")
+        if self.call_active.is_set():
+            speak(reply)
+        self.state("idle")
+
     def run_call(self) -> None:
         """One call: turns until the handset is hung up."""
         from config import MEMORY_TIMEOUT
@@ -80,6 +108,7 @@ class DialogService:
                     use_pir=False, history=history, facts_block=facts_block,
                     trigger="handset", on_state=self.state,
                     still_active=active,
+                    intercept=self.intercept,
                 )
                 if pre_reset is not None:
                     extract_facts_async(pre_reset, source=f"verbal-{int(time.time())}")
@@ -93,6 +122,8 @@ class DialogService:
                     extract_facts_async(history, source=f"timeout-{int(time.time())}")
                     history = []
                     _facts, facts_block = _reload_facts()
+                if callback.is_goodbye(run_pipeline.last_text):
+                    self.offer_callback()
             except Exception as e:
                 log.error("Turn failed: %s", type(e).__name__)
                 if active():

@@ -38,7 +38,9 @@ RETENTION_DAYS = 7         # A8: appointment + 7 days
 # any more but marked "verpasst", so the senior is not called hours late.
 STALE_HOURS = 2
 
-KINDS = ("termin", "medikament")
+KINDS = ("termin", "medikament", "rueckruf")
+# A7: a callback that nobody answers is "nicht erreicht" (same 2 attempts)
+NICHT_ERREICHT = "nicht erreicht"
 
 # Reminder status values (shown in the portal later, PR 10)
 GEPLANT, KLINGELT, BESTAETIGT, VERPASST = "geplant", "klingelt", "bestaetigt", "verpasst"
@@ -105,6 +107,8 @@ def add_appointment(title: str, due_local: datetime, created_by: str,
     if pre_minutes is None:
         # Proposal: medication reminders ring at the time itself only
         pre_minutes = PRE_REMINDER_MINUTES if kind == "termin" else 0
+    if kind == "rueckruf":
+        pre_minutes = 0
 
     conn = connect()
     try:
@@ -135,6 +139,8 @@ def reminder_text(kind: str, stage: str, title: str, due_utc: datetime) -> str:
     hhmm = due_utc.astimezone(LOCAL_TZ).strftime("%H:%M")
     if kind == "medikament":
         return f"Guten Tag. Eine Erinnerung an Ihre Medikamente: {title}."
+    if kind == "rueckruf":
+        return "Guten Tag. Hier ist Ihr Sprachassistent. Sie wollten, dass ich Sie anrufe. Wie geht es Ihnen?"
     if stage == "pre":
         return f"Guten Tag. Eine Erinnerung: Um {hhmm} Uhr haben Sie {title}."
     return f"Guten Tag. Eine Erinnerung: Jetzt, um {hhmm} Uhr, haben Sie {title}."
@@ -205,9 +211,11 @@ class ReminderScheduler:
             # Too old (device was off) or all attempts used up (restart during
             # ringing): close as missed instead of ringing (A6, STALE_HOURS)
             conn.execute(
-                "UPDATE reminders SET status = ?, updated_at = ? "
+                "UPDATE reminders SET updated_at = ?, status = CASE WHEN (SELECT kind FROM "
+                "appointments a WHERE a.id = reminders.appointment_id) = 'rueckruf' "
+                "THEN ? ELSE ? END "
                 "WHERE status IN (?, ?) AND (due_at <= ? OR (attempts >= ? AND next_attempt_at <= ?))",
-                (VERPASST, _iso(now), GEPLANT, KLINGELT,
+                (_iso(now), NICHT_ERREICHT, VERPASST, GEPLANT, KLINGELT,
                  _iso(now - timedelta(hours=STALE_HOURS)), MAX_ATTEMPTS, _iso(now)),
             )
             conn.commit()
@@ -249,9 +257,14 @@ class ReminderScheduler:
                 "SELECT attempts FROM reminders WHERE id = ?", (reminder_id,)
             ).fetchone()[0]
             if attempts >= MAX_ATTEMPTS:
+                kind = conn.execute(
+                    "SELECT a.kind FROM reminders r JOIN appointments a ON a.id = r.appointment_id "
+                    "WHERE r.id = ?", (reminder_id,),
+                ).fetchone()[0]
+                final = NICHT_ERREICHT if kind == "rueckruf" else VERPASST
                 conn.execute(
                     "UPDATE reminders SET status = ?, updated_at = ? WHERE id = ?",
-                    (VERPASST, _iso(now), reminder_id),
+                    (final, _iso(now), reminder_id),
                 )
                 log.info("Reminder %d missed after %d attempts", reminder_id, attempts)
             elif retry_at is not None:
