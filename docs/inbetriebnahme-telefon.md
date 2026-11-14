@@ -181,6 +181,7 @@ python core_service.py --input gpio
 | 6a | «Rat», dann «Wie erreiche ich die Spitex?» (vorher `python advice_cli.py add "Telefonnummer Spitex" "Die Spitex erreichen Sie unter …" --by "die Spitex"`) | «Zum Thema Telefonnummer Spitex hat die Spitex hinterlegt: …» |
 | 6b | «Rat», dann «Was hilft gegen Kopfweh?» | «Dazu ist bei mir nichts hinterlegt. Fragen Sie Ihre Spitex oder Ihre Ärztin.» |
 | 6c | «Rat», dann «Ich habe Schmerzen in der Brust» | «Wenn es ein Notfall ist, drücken Sie sofort den Hilfe-Knopf oder rufen Sie 144 an.» |
+| 6d | Im Gespräch (ohne Knopf): «Ich bin gestürzt» | zuerst derselbe Notfall-Satz, danach die Antwort des Modells |
 | 7 | «Hilfe» (Hörer egal) | Lautsprecher: «Ich informiere jetzt Test Tochter. Im Notfall …»; im Log `[console channel] alert` |
 | 8 | Testtermin erreicht | Klingeln im Raum; abheben → Ansage im Hörer |
 | 9 | Termin klingeln lassen | nach 10 min zweiter Versuch, danach «verpasst» (`appointments_cli.py list`) |

@@ -82,6 +82,7 @@ def run_pipeline(
     trigger: str | None = None, on_state=_no_state,
     still_active=lambda: True,
     intercept=None,
+    notice=None,
 ) -> tuple[list[dict], list[dict] | None]:
     """Run one full interaction cycle.
 
@@ -91,7 +92,9 @@ def run_pipeline(
     the core process (LLM hang detection). still_active() is checked after
     transcription: if the senior hung up meanwhile, nothing is sent to the LLM,
     and again before each spoken answer. intercept(text) may return a fixed
-    reply (e.g. cancel a callback); then the LLM is skipped. The last
+    reply (e.g. cancel a callback); then the LLM is skipped. notice(text) may
+    return a fixed sentence that is spoken first, before the LLM is asked
+    (emergency hint, T12/R3); the turn then continues as usual. The last
     transcript is kept in RAM as
     run_pipeline.last_text for the caller (never stored).
 
@@ -144,6 +147,13 @@ def run_pipeline(
         return history, None
 
     content_log.debug("User said: %s", text)
+
+    # Step 3-: fixed notice before anything else (emergency hint): spoken
+    # before the LLM is asked, so it does not depend on the LLM
+    first = notice(text) if notice else None
+    if first and still_active():
+        on_state("speaking")
+        speak(first)
 
     # Step 3a: "Vergiss das" / "Vergiss alles" (A8): handled without the LLM
     forget = _check_forget(text)

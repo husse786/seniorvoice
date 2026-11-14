@@ -340,3 +340,71 @@ def test_rat_button_without_handset_asks_to_lift(env):
     core.handle(hw.InputEvent("hook_off"))
     core.handle(hw.InputEvent("button", "rat"))
     assert sent == ["call_start", "button"]
+
+
+# --- R3: the same emergency hint in the normal conversation (Sprechen) ---
+
+def _turn(env, monkeypatch, said, llm_answer="Das tut mir leid."):
+    main = env.load("main")
+    events = []
+    for name, attrs in {
+        "audio_capture": {"record_until_silence": lambda: b"RIFF"},
+        "stt": {"transcribe": lambda wav: said},
+        "tts": {"speak": lambda t: events.append(("speak", t))},
+    }.items():
+        mod = types.ModuleType(name)
+        for k, v in attrs.items():
+            setattr(mod, k, v)
+        monkeypatch.setitem(sys.modules, name, mod)
+    import llm_client
+
+    def chat(text, history, facts_block=""):
+        events.append(("llm", text))
+        return llm_answer, history + [{"role": "user", "content": text},
+                                      {"role": "assistant", "content": llm_answer}]
+    monkeypatch.setattr(llm_client, "chat", chat)
+    monkeypatch.setattr(main, "LLM_STREAM", False)
+    dialog = __import__("dialog_service")
+    service = dialog.DialogService(__import__("bus").Bus(socket.socketpair()[1]))
+    main.run_pipeline(False, [], trigger="handset", intercept=service.intercept, notice=service.notice)
+    return events
+
+
+def test_conversation_emergency_hint_before_the_model(env, monkeypatch):
+    events = _turn(env, monkeypatch, "Ich habe so Schmerzen in der Brust")
+    advice = sys.modules["advice"]
+    assert events[0] == ("speak", advice.EMERGENCY)
+    assert events[1][0] == "llm"                    # the conversation goes on
+    assert events[-1] == ("speak", "Das tut mir leid.")
+
+
+def test_conversation_without_emergency_has_no_hint(env, monkeypatch):
+    events = _turn(env, monkeypatch, "Wie wird das Wetter morgen?", "Sonnig.")
+    assert [e for e in events if e[0] == "speak"] == [("speak", "Sonnig.")]
+
+
+def test_conversation_hint_even_if_model_fails(env, monkeypatch):
+    main = env.load("main")
+    spoken = []
+    for name, attrs in {
+        "audio_capture": {"record_until_silence": lambda: b"RIFF"},
+        "stt": {"transcribe": lambda wav: "Ich bin gestürzt"},
+        "tts": {"speak": spoken.append},
+    }.items():
+        mod = types.ModuleType(name)
+        for k, v in attrs.items():
+            setattr(mod, k, v)
+        monkeypatch.setitem(sys.modules, name, mod)
+    import llm_client
+
+    def chat(text, history, facts_block=""):
+        raise TimeoutError()
+    monkeypatch.setattr(llm_client, "chat", chat)
+    monkeypatch.setattr(main, "LLM_STREAM", False)
+    dialog = __import__("dialog_service")
+    service = dialog.DialogService(__import__("bus").Bus(socket.socketpair()[1]))
+    try:
+        main.run_pipeline(False, [], trigger="handset", notice=service.notice)
+    except Exception:
+        pass
+    assert spoken[0] == sys.modules["advice"].EMERGENCY

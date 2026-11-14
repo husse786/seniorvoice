@@ -67,6 +67,15 @@ class DialogService:
 
     # --- conversation ---
 
+    def notice(self, text: str) -> str | None:
+        """R3/T12: emergency hint in the normal conversation too.
+
+        Same word list as the Rat button, spoken before the LLM answers.
+        Nothing is logged about it (it would reveal what was said).
+        """
+        import advice
+        return advice.EMERGENCY if advice.is_emergency(text) else None
+
     def intercept(self, text: str) -> str | None:
         """Commands answered without the LLM."""
         if callback.is_cancel_request(text):
@@ -225,6 +234,7 @@ class DialogService:
                     # goes neither to the LLM nor into the history
                     still_active=lambda: active() and self.pending_button is None,
                     intercept=self.intercept,
+                    notice=self.notice,
                 )
                 if pre_reset is not None:
                     extract_facts_async(pre_reset, source=f"verbal-{int(time.time())}")
