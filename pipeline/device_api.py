@@ -455,6 +455,9 @@ class Handler(BaseHTTPRequestHandler):
                 advice.delete_item(existing["id"])
                 return 200, {"deleted": existing["id"]}
             data = self._body()
+            for key in ("topic", "text"):
+                if key in data and not isinstance(data[key], str):
+                    raise ApiError(400, f"{key} must be text")
             if not advice.update_item(existing["id"], data.get("topic"), data.get("text")):
                 raise ApiError(404, "not found")
             return 200, {"id": existing["id"]}

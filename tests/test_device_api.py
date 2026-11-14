@@ -259,5 +259,9 @@ def test_advice_validation_and_admin_has_no_access(api):
     assert api("POST", "/v1/advice", body={"topic": "a", "text": 5})[0] == 400
     assert api("POST", "/v1/advice", body={"topic": "a" * 81, "text": "b"})[0] == 400
     assert api("PUT", "/v1/advice/999", body={"text": "b"})[0] == 404
+    _, body = api("POST", "/v1/advice", body={"topic": "Einkauf", "text": "Samstag"})
+    assert api("PUT", f"/v1/advice/{body['id']}", body={"text": None})[0] == 400
+    assert api("PUT", f"/v1/advice/{body['id']}", body={"text": ""})[0] == 400
+    assert api.module.advice.get_item(body["id"])["text"] == "Samstag"
     actions = [e["action"] for e in api.module.list_audit("sandra")]
     assert "POST /v1/advice" in actions and "PUT /v1/advice/{id}" in actions

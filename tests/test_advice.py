@@ -93,6 +93,26 @@ def test_model_error_falls_back_to_word_match(advice):
     assert advice.find_item("Spitex?", items, _llm(TimeoutError())) is None
 
 
+def test_parse_choice(advice):
+    assert advice._parse_choice("3. Notruf 144", 5) == 3
+    assert advice._parse_choice("1 oder 2", 5) is None
+    assert advice._parse_choice("Nummer 2, also 2", 5) == 2
+    assert advice._parse_choice("144", 5) is None
+
+
+def test_health_hint_only_for_health_questions(advice):
+    items = _seed(advice)
+    assert not advice.answer_for(items[0], "Wie erreiche ich die Spitex?").endswith(advice.HEALTH_HINT)
+    assert advice.answer_for(items[1], "Kann ich die Tablette weglassen?").endswith(advice.HEALTH_HINT)
+
+
+def test_choice_is_not_logged(advice, caplog):
+    items = _seed(advice)
+    caplog.set_level(logging.DEBUG)
+    advice.find_item("Frage", items, _llm("2"))
+    assert "Weisse" not in caplog.text and "entry 2" not in caplog.text and "Rat: entry read out" in caplog.text
+
+
 def test_no_entries_means_no_model_call(advice):
     llm = _llm("1")
     assert advice.find_item("Wann kommt die Spitex?", [], llm) is None

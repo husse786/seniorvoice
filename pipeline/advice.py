@@ -21,6 +21,7 @@ content and are never shown in the portal).
 import re
 import sqlite3
 import unicodedata
+from contextlib import contextmanager
 from datetime import datetime, timezone
 
 import appointments
@@ -32,9 +33,16 @@ ASK = "Was möchten Sie wissen? Bitte stellen Sie Ihre Frage."
 NOTHING_HEARD = "Ich habe Sie leider nicht verstanden. Drücken Sie Rat nochmals, wenn Sie etwas fragen möchten."
 NO_ENTRY = "Dazu ist bei mir nichts hinterlegt. Fragen Sie Ihre Spitex oder Ihre Ärztin."
 ANSWER = "Zum Thema {topic} hat {by} hinterlegt: {text}"
-# After an entered text, if the question is about health: the entered text
-# answers what was entered, not necessarily what was asked
+# After an entered text, if the question is about medication or complaints:
+# the entered text answers what was entered, not necessarily what was asked
 HEALTH_HINT = "Bei weiteren Fragen dazu wenden Sie sich an Ihre Spitex oder Ihre Ärztin."
+# Narrower than memory.HEALTH_TERMS on purpose: "Wie erreiche ich die
+# Spitex?" is a question about contact details, not about health.
+HEALTH_QUESTION_TERMS = (
+    "medika", "tablett", "pille", "tropfen", "dosis", "insulin", "spritz", "salbe",
+    "schmerz", "weh", "blutdruck", "blutzucker", "zucker", "fieber", "krank", "symptom",
+    "nebenwirk", "absetzen", "weglassen", "doppelt", "mehr nehmen", "schwindel",
+)
 
 MAX_TOPIC = 80
 MAX_TEXT = 600
@@ -58,11 +66,23 @@ class AdviceError(ValueError):
     pass
 
 
-def _conn() -> sqlite3.Connection:
+_schema_ready: set[str] = set()
+
+
+@contextmanager
+def _conn():
+    """Connection that commits on success, rolls back on error, always closes."""
     conn = appointments.connect()
-    conn.row_factory = sqlite3.Row
-    conn.executescript(_SCHEMA)
-    return conn
+    try:
+        conn.row_factory = sqlite3.Row
+        from config import MEMORY_DB_PATH
+        if str(MEMORY_DB_PATH) not in _schema_ready:     # once per process and database
+            conn.executescript(_SCHEMA)
+            _schema_ready.add(str(MEMORY_DB_PATH))
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def _now() -> str:
@@ -85,6 +105,9 @@ def add_item(topic: str, text: str, created_by: str, created_by_id: str | None =
     text = _clean(text, MAX_TEXT, "text")
     created_by = _clean(created_by, MAX_TOPIC, "created_by")
     with _conn() as conn:
+        # Write lock before counting: two portal requests at once cannot
+        # both pass the limit
+        conn.execute("BEGIN IMMEDIATE")
         count = conn.execute("SELECT COUNT(*) FROM advice_items").fetchone()[0]
         if count >= MAX_ITEMS:
             raise AdviceError(f"at most {MAX_ITEMS} entries")
@@ -131,18 +154,17 @@ def delete_item(item_id: int) -> bool:
 
 # --- choosing an entry for a question ---
 
-# Words that say nothing about the topic of a question
+# Words that say nothing about the topic (shorter words are dropped anyway)
 _STOPWORDS = {
-    "aber", "alle", "also", "auch", "bitte", "dann", "darf", "dass", "dem", "den",
-    "der", "des", "die", "dies", "diese", "dieser", "doch", "dort", "durch", "eine",
-    "einem", "einen", "einer", "eines", "etwas", "fuer", "gibt", "habe", "haben",
-    "heute", "hier", "ihre", "ihrem", "ihren", "ihrer", "immer", "jetzt", "kann",
-    "koennen", "koennte", "machen", "mein", "meine", "meinem", "meinen", "meiner",
-    "mich", "mir", "mit", "muss", "nach", "nicht", "noch", "oder", "sagen", "sein",
-    "sich", "sie", "sind", "soll", "sollte", "ueber", "und", "unter", "viel",
-    "von", "vor", "wann", "warum", "was", "weiss", "welche", "welcher", "welches",
-    "wenn", "werden", "wie", "wieder", "wieviel", "wird", "wissen", "woher", "wohin",
-    "wo", "zum", "zur", "zu",
+    "aber", "alle", "also", "auch", "bitte", "dann", "darf", "dass", "dies",
+    "diese", "dieser", "doch", "dort", "durch", "eine", "einem", "einen", "einer",
+    "eines", "etwas", "fuer", "gibt", "habe", "haben", "heute", "hier", "ihre",
+    "ihrem", "ihren", "ihrer", "immer", "jetzt", "kann", "koennen", "koennte",
+    "machen", "mein", "meine", "meinem", "meinen", "meiner", "mich", "muss", "nach",
+    "nicht", "noch", "oder", "sagen", "sein", "sich", "sind", "soll", "sollte",
+    "ueber", "unter", "viel", "wann", "warum", "weiss", "welche", "welcher",
+    "welches", "wenn", "werden", "wieder", "wieviel", "wird", "wissen", "woher",
+    "wohin",
 }
 _FOLD = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 
@@ -190,12 +212,17 @@ def _select_messages(question: str, items: list[dict]) -> list[dict]:
 
 
 def _parse_choice(reply: str, count: int) -> int | None:
-    """Number in the reply: 0..count, else None (unusable)."""
-    numbers = re.findall(r"-?\d+", reply or "")
-    if len(set(numbers)) != 1:
-        return None                     # no number, or several different ones
-    choice = int(numbers[0])
-    return choice if 0 <= choice <= count else None
+    """Number in the reply: 0..count, else None (unusable).
+
+    The first number counts. Further numbers are ignored unless they are
+    another valid choice ("1 oder 2" is unusable; "3. Notruf 144" is 3).
+    """
+    numbers = [int(n) for n in re.findall(r"-?\d+", reply or "")]
+    if not numbers or not 0 <= numbers[0] <= count:
+        return None
+    if any(n != numbers[0] and 0 <= n <= count for n in numbers[1:]):
+        return None
+    return numbers[0]
 
 
 def find_item(question: str, items: list[dict] | None = None, complete=None) -> dict | None:
@@ -220,14 +247,14 @@ def find_item(question: str, items: list[dict] | None = None, complete=None) -> 
         item = None
     else:
         item = items[choice - 1]
-    log.info("Rat: %s", f"entry {item['id']} read out" if item else "no entry fits")
+    # Which entry was chosen would reveal what was asked: not logged
+    log.info("Rat: %s", "entry read out" if item else "no entry fits")
     return item
 
 
 def is_health_question(question: str) -> bool:
-    from memory import HEALTH_TERMS
     text = question.lower()
-    return any(term in text for term in HEALTH_TERMS)
+    return any(term in text for term in HEALTH_QUESTION_TERMS)
 
 
 def answer_for(item: dict | None, question: str = "") -> str:
