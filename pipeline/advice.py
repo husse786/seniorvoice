@@ -69,19 +69,24 @@ EMERGENCY_TERMS = (
     "sturz", "gestuerzt", "hingefallen", "umgefallen", "hinfallen", "bin gefallen",
     "ist gefallen", "ausgerutscht", "unfall", "kann nicht aufstehen",
     "komme nicht hoch", "komme nicht mehr hoch", "nicht mehr aufstehen",
-    "am boden", "auf dem boden", "kann mich nicht bewegen", "kann mich nicht mehr bewegen",
+    "liege am boden", "liegt am boden", "liege auf dem boden", "liegt auf dem boden",
+    "kann mich nicht bewegen", "kann mich nicht mehr bewegen",
     # consciousness, stroke
     "bewusstlos", "ohnmacht", "ohnmaechtig", "wird schwarz", "schwarz vor augen",
     "reagiert nicht", "wacht nicht auf", "schlaganfall", "hirnschlag", "gelaehmt",
     "laehmung", "kann nicht sprechen", "kann nicht mehr sprechen", "gesicht haengt",
-    "taub", "verwirrt",
+    "taubheit", "verwirrt",
     # bleeding, poisoning, other
     "blutet", "blutung", "viel blut", "erbricht blut", "blut erbrochen",
-    "vergift", "zu viele tabletten", "zu viel genommen", "krampf", "anfall",
+    "vergift", "zu viele tabletten", "zu viel genommen", "krampfanfall", "anfall",
     "starke schmerzen", "furchtbare schmerzen", "unertraeglich",
-    "notfall", "notarzt", "krankenwagen", "ambulanz", "rettung", "144",
-    "hilfe", "sterbe", "sterben", "nicht mehr leben", "umbringen", "suizid",
+    "notfall", "notarzt", "krankenwagen", "ambulanz", "rettungsdienst",
+    "144 an", "144 rufen", "144 anrufen", "die 144",
+    "brauche hilfe", "hilfe hilfe", "hilf mir", "helfen sie mir", "hilfe bitte",
+    "bitte hilfe", "ich sterbe", "nicht mehr leben", "umbringen", "suizid",
 )
+# Whole words only ("taub" but not "Tauben", "krampf" but not "Krampfadern")
+EMERGENCY_WORDS = {"taub", "krampf", "kraempfe", "krampfe"}
 # Matched anywhere in a word ("Nasenblutung", "Kreislaufkollaps")
 EMERGENCY_PARTS = ("infarkt", "blutung", "atemnot", "luftnot", "bewusstlos", "kollaps")
 # Both words in the same question ("Mein Herz schmerzt", "Druck auf der Brust")
@@ -310,7 +315,7 @@ def is_emergency(question: str) -> bool:
     """T12: word list only, never the model. Deliberately broad."""
     text = _fold(question)
     words = text.split()
-    if _EMERGENCY_RE.search(text):
+    if _EMERGENCY_RE.search(text) or EMERGENCY_WORDS & set(words) or text == "hilfe":
         return True
     if any(part in w for w in words for part in EMERGENCY_PARTS):
         return True

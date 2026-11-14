@@ -344,13 +344,23 @@ def test_rat_button_without_handset_asks_to_lift(env):
 
 # --- R3: the same emergency hint in the normal conversation (Sprechen) ---
 
-def _turn(env, monkeypatch, said, llm_answer="Das tut mir leid."):
+@pytest.fixture
+def turn(env, monkeypatch):
+    """One conversation turn through run_pipeline with stubbed audio and LLM."""
     main = env.load("main")
+    dialog = __import__("dialog_service")
+    a, b = socket.socketpair()
+    service = dialog.DialogService(__import__("bus").Bus(b))
+    service.call_active.set()
     events = []
+    state = {"active": True, "llm": "Das tut mir leid.", "said": ""}
+
+    def speak(t):
+        events.append(("speak", t))
     for name, attrs in {
         "audio_capture": {"record_until_silence": lambda: b"RIFF"},
-        "stt": {"transcribe": lambda wav: said},
-        "tts": {"speak": lambda t: events.append(("speak", t))},
+        "stt": {"transcribe": lambda wav: state["said"]},
+        "tts": {"speak": lambda t: speak(t)},
     }.items():
         mod = types.ModuleType(name)
         for k, v in attrs.items():
@@ -359,52 +369,83 @@ def _turn(env, monkeypatch, said, llm_answer="Das tut mir leid."):
     import llm_client
 
     def chat(text, history, facts_block=""):
-        events.append(("llm", text))
-        return llm_answer, history + [{"role": "user", "content": text},
-                                      {"role": "assistant", "content": llm_answer}]
+        events.append(("llm", text, facts_block))
+        if isinstance(state["llm"], Exception):
+            raise state["llm"]
+        return state["llm"], history + [{"role": "user", "content": text},
+                                        {"role": "assistant", "content": state["llm"]}]
     monkeypatch.setattr(llm_client, "chat", chat)
     monkeypatch.setattr(main, "LLM_STREAM", False)
-    dialog = __import__("dialog_service")
-    service = dialog.DialogService(__import__("bus").Bus(socket.socketpair()[1]))
-    main.run_pipeline(False, [], trigger="handset", intercept=service.intercept, notice=service.notice)
-    return events
+
+    def run(said, history=None, **kw):
+        state["said"] = said
+        kw.setdefault("notice", service.notice)
+        return main.run_pipeline(False, history or [], trigger="handset",
+                                 still_active=lambda: state["active"], **kw)
+    run.events, run.state, run.service, run.main = events, state, service, main
+    yield run
+    a.close()
+    b.close()
 
 
-def test_conversation_emergency_hint_before_the_model(env, monkeypatch):
-    events = _turn(env, monkeypatch, "Ich habe so Schmerzen in der Brust")
+def test_conversation_emergency_hint_before_the_model(turn):
+    turn("Ich habe so Schmerzen in der Brust")
     advice = sys.modules["advice"]
-    assert events[0] == ("speak", advice.EMERGENCY)
-    assert events[1][0] == "llm"                    # the conversation goes on
-    assert events[-1] == ("speak", "Das tut mir leid.")
+    assert turn.events[0] == ("speak", advice.EMERGENCY)
+    assert turn.events[1][0] == "llm"                        # the conversation goes on
+    assert turn.main.NOTICE_GIVEN_PROMPT in turn.events[1][2]  # model knows about the hint
+    assert turn.events[-1] == ("speak", "Das tut mir leid.")
 
 
-def test_conversation_without_emergency_has_no_hint(env, monkeypatch):
-    events = _turn(env, monkeypatch, "Wie wird das Wetter morgen?", "Sonnig.")
-    assert [e for e in events if e[0] == "speak"] == [("speak", "Sonnig.")]
+def test_conversation_without_emergency_has_no_hint(turn):
+    turn.state["llm"] = "Sonnig."
+    turn("Wie wird das Wetter morgen?")
+    assert [e for e in turn.events if e[0] == "speak"] == [("speak", "Sonnig.")]
+    assert turn.main.NOTICE_GIVEN_PROMPT not in turn.events[0][2]
 
 
-def test_conversation_hint_even_if_model_fails(env, monkeypatch):
-    main = env.load("main")
-    spoken = []
-    for name, attrs in {
-        "audio_capture": {"record_until_silence": lambda: b"RIFF"},
-        "stt": {"transcribe": lambda wav: "Ich bin gestürzt"},
-        "tts": {"speak": spoken.append},
-    }.items():
-        mod = types.ModuleType(name)
-        for k, v in attrs.items():
-            setattr(mod, k, v)
-        monkeypatch.setitem(sys.modules, name, mod)
-    import llm_client
+def test_conversation_hint_even_if_model_fails(turn):
+    turn.state["llm"] = TimeoutError()
+    with pytest.raises(TimeoutError):
+        turn("Ich bin gestürzt")
+    assert turn.events[0] == ("speak", sys.modules["advice"].EMERGENCY)
 
-    def chat(text, history, facts_block=""):
-        raise TimeoutError()
-    monkeypatch.setattr(llm_client, "chat", chat)
-    monkeypatch.setattr(main, "LLM_STREAM", False)
-    dialog = __import__("dialog_service")
-    service = dialog.DialogService(__import__("bus").Bus(socket.socketpair()[1]))
-    try:
-        main.run_pipeline(False, [], trigger="handset", notice=service.notice)
-    except Exception:
-        pass
-    assert spoken[0] == sys.modules["advice"].EMERGENCY
+
+def test_conversation_hint_once_per_call(turn):
+    turn("Ich bin gestürzt")
+    turn("Seit dem Sturz habe ich Angst")
+    hints = [e for e in turn.events if e == ("speak", sys.modules["advice"].EMERGENCY)]
+    assert len(hints) == 1
+
+
+def test_hang_up_during_hint_stops_the_turn(turn):
+    def speak_and_hang_up(t):
+        turn.events.append(("speak", t))
+        turn.state["active"] = False
+    sys.modules["tts"].speak = speak_and_hang_up
+    history, _ = turn("Ich bin gestürzt", history=[])
+    assert [e[0] for e in turn.events] == ["speak"] and history == []
+
+
+def test_default_notice_without_dialog_service(turn):
+    """FS26 mode (main.py) gets the hint too: it is run_pipeline's default."""
+    turn("Ich bin hingefallen", notice=None)
+    assert turn.events[0] == ("speak", sys.modules["advice"].EMERGENCY)
+
+
+@pytest.mark.parametrize("said", [
+    "Danke für die Hilfe, tschüss", "Die Tauben auf dem Balkon", "Heute gibt es Pouletbrust",
+    "Ich habe Krampfadern", "Das kostet 144 Franken", "Der Teppich am Boden ist neu",
+    "Mein Mann ist vor fünf Jahren gestorben",
+])
+def test_everyday_conversation_gives_no_hint(turn, said):
+    turn.state["llm"] = "Aha."
+    turn(said)
+    assert [e for e in turn.events if e[0] == "speak"] == [("speak", "Aha.")]
+
+
+def test_family_dictation_gets_the_hint(env, monkeypatch):
+    service, spoken = _dialog(env, monkeypatch, ["Ich bin hingefallen, komm bitte", "Nein"])
+    __import__("help_alert").set_contacts([{"name": "Sandra", "role": "Tochter", "address": "x"}])
+    service.family_message()
+    assert sys.modules["advice"].EMERGENCY in spoken

@@ -77,6 +77,19 @@ def _no_state(state: str) -> None:
     pass
 
 
+NOTICE_GIVEN_PROMPT = (
+    "Das Geraet hat gerade auf einen moeglichen Notfall hingewiesen: Hilfe-Knopf "
+    "druecken oder 144 anrufen. Widersprich diesem Hinweis nicht, beruhige nicht "
+    "und gib keine medizinischen Ratschlaege. Antworte in einem kurzen Satz."
+)
+
+
+def emergency_notice(text: str) -> str | None:
+    """Default notice (T12/R3): the emergency hint from the fixed word list."""
+    import advice
+    return advice.EMERGENCY if advice.is_emergency(text) else None
+
+
 def run_pipeline(
     use_pir: bool, history: list[dict], facts_block: str = "",
     trigger: str | None = None, on_state=_no_state,
@@ -93,8 +106,9 @@ def run_pipeline(
     transcription: if the senior hung up meanwhile, nothing is sent to the LLM,
     and again before each spoken answer. intercept(text) may return a fixed
     reply (e.g. cancel a callback); then the LLM is skipped. notice(text) may
-    return a fixed sentence that is spoken first, before the LLM is asked
-    (emergency hint, T12/R3); the turn then continues as usual. The last
+    return a fixed sentence that is spoken first, before the LLM is asked;
+    the default is the emergency hint (T12/R3). The turn then continues and
+    the LLM is told that the hint was given. The last
     transcript is kept in RAM as
     run_pipeline.last_text for the caller (never stored).
 
@@ -150,10 +164,18 @@ def run_pipeline(
 
     # Step 3-: fixed notice before anything else (emergency hint): spoken
     # before the LLM is asked, so it does not depend on the LLM
-    first = notice(text) if notice else None
-    if first and still_active():
-        on_state("speaking")
-        speak(first)
+    first = (notice or emergency_notice)(text)
+    if first:
+        if still_active():
+            on_state("speaking")
+            speak(first)
+        if not still_active():
+            # Hung up or a button pressed during the hint: the transcript
+            # goes neither to the LLM nor into the history
+            on_state("idle")
+            return history, None
+        # The model knows the hint was given and must not contradict it
+        facts_block = (facts_block + "\n" if facts_block else "") + NOTICE_GIVEN_PROMPT
 
     # Step 3a: "Vergiss das" / "Vergiss alles" (A8): handled without the LLM
     forget = _check_forget(text)

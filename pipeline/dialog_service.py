@@ -14,6 +14,7 @@ import time
 
 from logging_config import setup_logging, get_logger
 from bus import Bus
+import advice
 import callback
 
 setup_logging()
@@ -40,6 +41,7 @@ class DialogService:
         self.call_id = 0
         self.active = self.call_active.is_set   # replaced per call in run_call
         self.pending_button: str | None = None
+        self.hint_given = False                 # emergency hint said in this call
 
     # --- messages from the core ---
 
@@ -70,11 +72,23 @@ class DialogService:
     def notice(self, text: str) -> str | None:
         """R3/T12: emergency hint in the normal conversation too.
 
-        Same word list as the Rat button, spoken before the LLM answers.
-        Nothing is logged about it (it would reveal what was said).
+        Same word list as the Rat button, spoken before the LLM answers, at
+        most once per call (talking about a fall over several turns must not
+        repeat it each time). The Rat button always says it. Nothing is
+        logged about it (it would reveal what was said).
         """
-        import advice
-        return advice.EMERGENCY if advice.is_emergency(text) else None
+        if self.hint_given or not advice.is_emergency(text):
+            return None
+        self.hint_given = True
+        return advice.EMERGENCY
+
+    def say_notice(self, text: str) -> None:
+        """Hint for spoken input outside the conversation (Family, callback)."""
+        from tts import speak
+        sentence = self.notice(text)
+        if sentence and self.active():
+            self.state("speaking")
+            speak(sentence)
 
     def intercept(self, text: str) -> str | None:
         """Commands answered without the LLM."""
@@ -101,6 +115,7 @@ class DialogService:
         if not self.active():
             self.state("idle")          # hung up: no consent, nothing scheduled
             return
+        self.say_notice(answer)
         _accepted, reply = callback.record_answer(answer, now)
         self.state("speaking")
         if self.active():
@@ -128,6 +143,7 @@ class DialogService:
         if not self.active():
             self.state("idle")
             return
+        self.say_notice(text)
         self.state("speaking")
         if not text:
             speak(family.NOTHING_HEARD)
@@ -163,7 +179,6 @@ class DialogService:
         The question is neither stored nor logged and does not go into the
         conversation history, so it never reaches the notes either.
         """
-        import advice
         from audio_capture import record_until_silence
         from stt import transcribe
         from tts import speak
@@ -183,9 +198,10 @@ class DialogService:
             self.state("idle")
             return
         # T12: the emergency hint comes from the word list and is spoken
-        # before the model is asked
+        # before the model is asked (always here: it is an explicit question)
         emergency = advice.is_emergency(question)
         if emergency:
+            self.hint_given = True
             self.state("speaking")
             speak(advice.EMERGENCY)
         if not self.active():
@@ -206,6 +222,7 @@ class DialogService:
         from tts import speak
 
         my_call = self.call_id
+        self.hint_given = False
 
         def active() -> bool:
             return self.running and self.call_active.is_set() and self.call_id == my_call
