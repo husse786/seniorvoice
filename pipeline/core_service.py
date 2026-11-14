@@ -13,6 +13,7 @@ So Help and reminders keep working when the LLM hangs (condition of A12).
 """
 
 import argparse
+import itertools
 import os
 import queue
 import signal
@@ -192,8 +193,7 @@ class Core:
     def _say(self, text: str) -> bool:
         """Play a fixed sentence (no LLM). False if it could not be played."""
         try:
-            self.announce(text)
-            return True
+            return self.announce(text) is not False
         except Exception as e:
             log.error("Announcement failed: %s", type(e).__name__)
             return False
@@ -274,23 +274,44 @@ class Core:
 
 
 class AnnouncementQueue:
-    """Plays fixed sentences one after another on its own thread."""
+    """All fixed sentences of the core, one after another on one thread.
+
+    Help sentences (urgent) go before waiting reminder or restart sentences,
+    so they never overlap other core speech. The dialog speaks over the
+    handset, the core over the room speaker (A9, A13).
+    """
 
     def __init__(self, speak: Callable[[str], None]):
         self._speak = speak
-        self._queue: "queue.Queue[str]" = queue.Queue()
+        self._queue: "queue.PriorityQueue" = queue.PriorityQueue()
+        self._seq = itertools.count()
         threading.Thread(target=self._run, name="announce", daemon=True).start()
 
-    def say(self, text: str) -> None:
-        self._queue.put(text)
+    def say(self, text: str, urgent: bool = False) -> None:
+        self._queue.put((0 if urgent else 1, next(self._seq), text, None))
+
+    def say_urgent(self, text: str) -> None:
+        self.say(text, urgent=True)
+
+    def say_and_wait(self, text: str) -> bool:
+        """Play and wait; False if it could not be played."""
+        done = {"event": threading.Event(), "ok": False}
+        self._queue.put((1, next(self._seq), text, done))
+        done["event"].wait()
+        return done["ok"]
 
     def _run(self) -> None:
         while True:
-            text = self._queue.get()
+            _prio, _seq, text, done = self._queue.get()
+            ok = False
             try:
                 self._speak(text)
+                ok = True
             except Exception as e:
                 log.error("Announcement failed: %s", type(e).__name__)
+            if done is not None:
+                done["ok"] = ok
+                done["event"].set()
 
 
 def _speak(text: str) -> None:
@@ -320,14 +341,14 @@ def main() -> None:
     from channels import channel_from_env
     from help_alert import HelpService
     # Help speaks through a queue: the core loop never waits for audio
-    help_voice = AnnouncementQueue(_speak)
-    help_service = HelpService(channel_from_env(), announce=help_voice.say,
+    voice = AnnouncementQueue(_speak)
+    help_service = HelpService(channel_from_env(), announce=voice.say_urgent,
                                senior_name=os.getenv("SENIOR_NAME", ""))
     help_service.run_worker()
     from family import run_sender
     run_sender(help_service.channel)
     core = Core(DialogSupervisor(), SimulatedRinger(), help_handler=help_service,
-                announce=_speak)
+                announce=voice.say_and_wait)
     if args.input == "keyboard":
         KeyboardInput().start(core.events)
     signal.signal(signal.SIGTERM, lambda *a: setattr(core, "running", False))

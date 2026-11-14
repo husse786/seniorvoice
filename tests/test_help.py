@@ -35,8 +35,9 @@ def help_env(env):
 def test_help_notifies_first_contact_and_confirms(help_env):
     help_mod, service, channel, clock, said = help_env
     service.trigger()
-    assert said == ["Ich informiere jetzt Sandra. Im Notfall rufen Sie bitte 144 an."]
+    assert said == []                                   # core thread: no DB, no network
     service.step()
+    assert said == ["Ich informiere jetzt Sandra. Im Notfall rufen Sie bitte 144 an."]
     address, text, alert_id = channel.sent[0]
     assert address == "chat-sandra"
     assert "Frau Keller" in text and "Hilfe-Knopf" in text and "kein Notruf" in text
@@ -108,12 +109,14 @@ def test_no_contacts_says_144(help_env):
     help_mod, service, channel, clock, said = help_env
     help_mod.set_contacts([])
     service.trigger()
+    service.step()
     assert said == [help_mod.SAY_NO_CONTACTS]
 
 
 def test_alerts_deleted_after_30_days(help_env):
     help_mod, service, channel, clock, said = help_env
     service.trigger()
+    service.step()
     assert help_mod.purge_expired(clock.wall + timedelta(days=29)) == 0
     assert help_mod.purge_expired(clock.wall + timedelta(days=31)) == 1
 
@@ -160,5 +163,77 @@ def test_help_works_while_dialog_hangs_with_real_service(env, monkeypatch):
     service = help_mod.HelpService(channels.ConsoleChannel(), announce=said.append)
     core = core_mod.Core(DeadSupervisor(), hw.SimulatedRinger(), help_handler=service,
                          announce=said.append, with_reminders=False)
-    core.handle(hw.InputEvent("button", "hilfe"))
-    assert said == ["Ich informiere jetzt Sandra. Im Notfall rufen Sie bitte 144 an."]
+    service.run_worker(interval=5.0)
+    try:
+        import time
+        t = time.monotonic()
+        core.handle(hw.InputEvent("button", "hilfe"))
+        assert time.monotonic() - t < 0.1           # core thread returns at once
+        for _ in range(100):
+            if said:
+                break
+            time.sleep(0.01)
+        assert said == ["Ich informiere jetzt Sandra. Im Notfall rufen Sie bitte 144 an."]
+    finally:
+        service.stop()
+
+
+def test_escalation_gives_next_contact_its_own_delivery_deadline(help_env, monkeypatch):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()                                      # delivered to Sandra
+    real = channel.send_alert
+
+    def spitex_unreachable(address, text, alert_id):
+        if address == "chat-spitex":
+            raise OSError("no route")
+        return real(address, text, alert_id)
+    monkeypatch.setattr(channel, "send_alert", spitex_unreachable)
+    clock.advance(10 * 60)
+    service.step()                                      # escalate, delivery fails
+    clock.advance(30)
+    service.step()
+    assert help_mod.list_alerts()[0]["status"] == "offen"
+    clock.advance(31)
+    service.step()
+    assert said[-1] == help_mod.SAY_CALL_144
+    assert help_mod.list_alerts()[0]["status"] == "niemand erreicht"
+
+
+def test_editing_contacts_during_alert_does_not_break_it(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    help_mod.set_contacts([])                           # list replaced during the alert
+    service.trigger()                                   # second press
+    assert said[-1].startswith("Ich habe Sandra bereits informiert")
+    service.simulate_ack()
+    service.step()
+    assert said[-1] == "Sandra hat geantwortet und kümmert sich um Sie."
+
+
+def test_open_alert_after_restart_is_closed_with_144(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()                                      # alert open, then the core restarts
+    restarted = help_mod.HelpService(channel, announce=said.append,
+                                     now=lambda: clock.wall, monotonic=lambda: clock.mono)
+    clock.advance(120)
+    restarted.step()
+    assert said[-1] == help_mod.SAY_CALL_144
+    assert help_mod.list_alerts()[0]["status"] == "niemand erreicht"
+    restarted.trigger()
+    restarted.step()                                    # a new press works normally
+    assert said[-1].startswith("Ich informiere jetzt Sandra")
+
+
+def test_database_failure_still_says_144(help_env, monkeypatch):
+    help_mod, service, channel, clock, said = help_env
+
+    def locked():
+        raise help_mod.sqlite3.OperationalError("database is locked")
+    service.step()                                      # startup recovery done
+    monkeypatch.setattr(help_mod, "_conn", locked)
+    service.trigger()
+    service.step()
+    assert said == [help_mod.SAY_CALL_144]

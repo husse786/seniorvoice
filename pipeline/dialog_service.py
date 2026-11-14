@@ -80,10 +80,14 @@ class DialogService:
         now = datetime.now(timezone.utc)
         if not self.active() or not callback.may_offer(now):
             return
+        callback.reserve_offer(now)     # counts as asked today (unanswered = no)
         self.state("speaking")
         speak(callback.offer_question(now))
         self.state("listening")
         answer = transcribe(record_until_silence()) if self.active() else ""
+        if not self.active():
+            self.state("idle")          # hung up: no consent, nothing scheduled
+            return
         _accepted, reply = callback.record_answer(answer, now)
         self.state("speaking")
         if self.active():
@@ -119,8 +123,11 @@ class DialogService:
         speak(family.READ_BACK.format(text=text, name=contact["name"]))
         self.state("listening")
         answer = transcribe(record_until_silence())
+        if not self.active():
+            self.state("idle")          # hung up: send nothing, say nothing
+            return
         self.state("speaking")
-        if callback.is_clear_yes(answer) and self.active():
+        if callback.is_clear_yes(answer):
             family.queue_message(text, contact)
             speak(family.SENT.format(name=contact["name"]))
         else:
@@ -153,7 +160,9 @@ class DialogService:
                 history, pre_reset = run_pipeline(
                     use_pir=False, history=history, facts_block=facts_block,
                     trigger="handset", on_state=self.state,
-                    still_active=active,
+                    # A button pressed mid-turn ends this turn: its transcript
+                    # goes neither to the LLM nor into the history
+                    still_active=lambda: active() and self.pending_button is None,
                     intercept=self.intercept,
                 )
                 if pre_reset is not None:

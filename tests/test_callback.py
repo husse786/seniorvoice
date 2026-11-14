@@ -140,3 +140,61 @@ def test_dialog_offers_callback_after_goodbye(env, monkeypatch):
     assert spoken[1].startswith("Darf ich Sie morgen um")
     assert spoken[2].startswith("Gerne. Ich rufe Sie morgen um")
     assert [r["kind"] for r in sys.modules["appointments"].list_reminders()] == ["rueckruf"]
+
+
+def test_cancel_also_removes_callback_waiting_for_retry(env):
+    cb = env.load("callback")
+    appts = sys.modules["appointments"]
+    cb.record_answer("Ja", NOW)
+    clock = {"wall": NOW + timedelta(days=1, minutes=3), "mono": 0.0}
+
+    class Ringer:
+        def ring(self): pass
+        def stop(self): pass
+    sched = appts.ReminderScheduler(Ringer(), in_call=lambda: False,
+                                    now=lambda: clock["wall"], monotonic=lambda: clock["mono"])
+    sched.tick()                                   # first attempt
+    clock["wall"] += timedelta(seconds=60); clock["mono"] += 60
+    sched.tick()                                   # unanswered, retry pending
+    assert appts.list_reminders()[0]["status"] == "klingelt"
+    assert cb.cancel_open_callbacks() == 1
+    assert appts.list_reminders() == []
+
+
+def _offer_dialog(env, monkeypatch, on_record):
+    import socket
+    env.load("main")
+    dialog = __import__("dialog_service")
+    bus_mod = __import__("bus")
+    a, b = socket.socketpair()
+    service = dialog.DialogService(bus_mod.Bus(b))
+    spoken = []
+    audio = types.ModuleType("audio_capture")
+    audio.record_until_silence = lambda: on_record(service)
+    stt = types.ModuleType("stt")
+    stt.transcribe = lambda wav: "Ja"
+    tts = types.ModuleType("tts")
+    tts.speak = spoken.append
+    for name, mod in [("audio_capture", audio), ("stt", stt), ("tts", tts)]:
+        monkeypatch.setitem(sys.modules, name, mod)
+    service.on_message({"type": "call_start"})
+    return service, spoken
+
+
+def test_yes_after_hang_up_schedules_nothing(env, monkeypatch):
+    def hang_up_while_answering(service):
+        service.on_message({"type": "call_end"})
+        return b"RIFF"
+    service, spoken = _offer_dialog(env, monkeypatch, hang_up_while_answering)
+    service.offer_callback()
+    assert sys.modules["appointments"].list_reminders() == []
+    assert len(spoken) == 1                        # only the question
+
+
+def test_failed_recording_still_counts_as_asked_today(env, monkeypatch):
+    def broken(service):
+        raise OSError("microphone gone")
+    service, spoken = _offer_dialog(env, monkeypatch, broken)
+    with pytest.raises(OSError):
+        service.offer_callback()
+    assert not sys.modules["callback"].may_offer(datetime.now(timezone.utc))
