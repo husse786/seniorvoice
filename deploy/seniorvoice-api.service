@@ -1,0 +1,29 @@
+# SeniorVoice device API for the portal (PR 10). Separate from the telephone:
+# no audio, no GPIO, no LLM. Starts only with DEVICE_API_TOKEN_SHA256 in .env
+# and listens only on DEVICE_API_HOST (the tunnel address, OA-09).
+# Install: see docs/geraete-api.md
+# Adjust User and paths if the device does not use user "pi" and ~/seniorvoice.
+
+[Unit]
+Description=SeniorVoice device API for the portal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/seniorvoice/pipeline
+EnvironmentFile=/home/pi/seniorvoice/.env
+ExecStart=/home/pi/seniorvoice/.venv/bin/python device_api.py
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/seniorvoice
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
