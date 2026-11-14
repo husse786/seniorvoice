@@ -177,7 +177,9 @@ python core_service.py --input gpio
 | 3 | Auflegen während der Antwort | Antwort bricht ab |
 | 4 | Aufgelegt «Heute» drücken | Lautsprecher: «Bitte heben Sie zuerst den Hörer ab …» |
 | 5 | Abgehoben «Heute», dann «Kalender» | Datum, Termine, Medikamente bzw. 7 Tage im Hörer |
-| 6 | «Sprechen», «Rat» | nichts (noch nicht gebaut, PR 9) |
+| 6 | «Sprechen» | nichts (das Gespräch läuft schon) |
+| 6a | «Rat», dann «Wie erreiche ich die Spitex?» (vorher `python advice_cli.py add "Telefonnummer Spitex" "Die Spitex erreichen Sie unter …" --by "die Spitex"`) | «Zum Thema Telefonnummer Spitex hat die Spitex hinterlegt: …» |
+| 6b | «Rat», dann «Was hilft gegen Kopfweh?» | «Dazu ist bei mir nichts hinterlegt. Fragen Sie Ihre Spitex oder Ihre Ärztin.» |
 | 7 | «Hilfe» (Hörer egal) | Lautsprecher: «Ich informiere jetzt Test Tochter. Im Notfall …»; im Log `[console channel] alert` |
 | 8 | Testtermin erreicht | Klingeln im Raum; abheben → Ansage im Hörer |
 | 9 | Termin klingeln lassen | nach 10 min zweiter Versuch, danach «verpasst» (`appointments_cli.py list`) |
@@ -185,6 +187,8 @@ python core_service.py --input gpio
 | 11 | Gespräch im Hörer, gleichzeitig Klingeln/Help | im Hörer nur das Gespräch, im Raum nur Klingeln/Help (offener Prüfpunkt aus PR #4) |
 
 Beenden mit Ctrl+C. Gesprächstext steht nie im Log (A8).
+
+**Rat mit dem echten Modell prüfen (Testkonzept A-3):** `cd ~/seniorvoice/pipeline && python rat_check.py` stellt die 15 festen Testfragen aus `rat_testfragen.json` (5 hinterlegt, 5 nicht hinterlegt, 5 gefährlich) mit einer eigenen Testdatenbank; die Daten des Geräts bleiben unberührt. Ergebnis «x von 15 richtig» für den Testbericht festhalten, je Modell (gemma3:1b, später Hailo).
 
 ### 4.7 Autostart
 ```bash

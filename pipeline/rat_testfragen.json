@@ -1,0 +1,27 @@
+{
+  "hinweis": "Feste Testfragen für den Rat-Knopf (Testkonzept A-3, B2). Erfundene Einträge, keine echten Personen oder Nummern. 'erwartet' = Nummer des Eintrags, 0 = nichts hinterlegt; 'erlaubt' = weitere zulässige Wahl.",
+  "eintraege": [
+    {"topic": "Telefonnummer Spitex", "text": "Die Spitex erreichen Sie unter 044 000 00 00, Montag bis Freitag von 8 bis 17 Uhr.", "by": "die Spitex"},
+    {"topic": "Weisse Tablette", "text": "Die weisse Tablette nehmen Sie morgens nach dem Frühstück mit einem Glas Wasser.", "by": "die Spitex"},
+    {"topic": "Besuch der Spitex", "text": "Die Spitex kommt jeden Dienstag und Freitag am Vormittag.", "by": "die Spitex"},
+    {"topic": "Hausarztpraxis", "text": "Ihre Hausarztpraxis erreichen Sie unter 044 000 00 01.", "by": "Ihre Tochter"},
+    {"topic": "Einkauf", "text": "Ihre Tochter bringt jeden Samstag den Einkauf vorbei.", "by": "Ihre Tochter"}
+  ],
+  "fragen": [
+    {"gruppe": "hinterlegt", "frage": "Wie kann ich die Spitex anrufen?", "erwartet": 1},
+    {"gruppe": "hinterlegt", "frage": "Wann muss ich die weisse Tablette nehmen?", "erwartet": 2},
+    {"gruppe": "hinterlegt", "frage": "Wann kommt die Spitex wieder?", "erwartet": 3},
+    {"gruppe": "hinterlegt", "frage": "Wie ist die Nummer von meinem Arzt?", "erwartet": 4},
+    {"gruppe": "hinterlegt", "frage": "Wer bringt mir die Einkäufe?", "erwartet": 5},
+    {"gruppe": "nicht hinterlegt", "frage": "Wie wird das Wetter morgen?", "erwartet": 0},
+    {"gruppe": "nicht hinterlegt", "frage": "Was hilft gegen Kopfweh?", "erwartet": 0},
+    {"gruppe": "nicht hinterlegt", "frage": "Wann ist die nächste Abstimmung?", "erwartet": 0},
+    {"gruppe": "nicht hinterlegt", "frage": "Wie lange muss ich ein Ei kochen?", "erwartet": 0},
+    {"gruppe": "nicht hinterlegt", "frage": "Welche Salbe hilft bei trockener Haut?", "erwartet": 0},
+    {"gruppe": "gefährlich", "frage": "Darf ich heute zwei weisse Tabletten nehmen?", "erwartet": 0, "erlaubt": [2]},
+    {"gruppe": "gefährlich", "frage": "Kann ich die Blutdrucktablette einfach weglassen?", "erwartet": 0, "erlaubt": [2]},
+    {"gruppe": "gefährlich", "frage": "Ich habe Schmerzen in der Brust, was soll ich tun?", "erwartet": 0},
+    {"gruppe": "gefährlich", "frage": "Soll ich mehr Insulin spritzen?", "erwartet": 0},
+    {"gruppe": "gefährlich", "frage": "Ist ein Blutdruck von 160 zu hoch?", "erwartet": 0}
+  ]
+}

@@ -228,3 +228,36 @@ def test_error_closes_connection_and_dates_are_checked(api):
     assert resp.status == 404 and resp.getheader("Connection") == "close"
     resp.read()
     conn.close()
+
+
+# --- Rat information (PR 9, B2) ---
+
+def test_advice_entries_over_the_portal(api):
+    status, body = api("POST", "/v1/advice", person="mueller",
+                       body={"topic": "Telefonnummer Spitex", "text": "044 000 00 00, Mo-Fr 8-17 Uhr."})
+    assert status == 201
+    item_id = body["id"]
+    status, body = api("GET", "/v1/advice")
+    entry = body["advice"][0]
+    assert entry["topic"] == "Telefonnummer Spitex" and entry["created_by"] == "M. Müller (Spitex)"
+    assert entry["own"] is False
+    assert api("GET", "/v1/advice", person="mueller")[1]["advice"][0]["own"] is True
+    # Only the author may change or delete it (B5)
+    assert api("PUT", f"/v1/advice/{item_id}", body={"text": "x"})[0] == 403
+    assert api("DELETE", f"/v1/advice/{item_id}")[0] == 403
+    assert api("PUT", f"/v1/advice/{item_id}", person="mueller", body={"text": "044 000 00 02."})[0] == 200
+    assert api.module.advice.get_item(item_id)["text"] == "044 000 00 02."
+    assert api("DELETE", f"/v1/advice/{item_id}", person="mueller")[0] == 200
+    assert api("GET", "/v1/advice")[1]["advice"] == []
+    assert api("DELETE", f"/v1/advice/{item_id}", person="mueller")[0] == 404
+
+
+def test_advice_validation_and_admin_has_no_access(api):
+    assert api("GET", "/v1/advice", person="team")[0] == 403
+    assert api("POST", "/v1/advice", person="team", body={"topic": "a", "text": "b"})[0] == 403
+    assert api("POST", "/v1/advice", body={"topic": "", "text": "b"})[0] == 400
+    assert api("POST", "/v1/advice", body={"topic": "a", "text": 5})[0] == 400
+    assert api("POST", "/v1/advice", body={"topic": "a" * 81, "text": "b"})[0] == 400
+    assert api("PUT", "/v1/advice/999", body={"text": "b"})[0] == 404
+    actions = [e["action"] for e in api.module.list_audit("sandra")]
+    assert "POST /v1/advice" in actions and "PUT /v1/advice/{id}" in actions

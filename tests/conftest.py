@@ -15,7 +15,7 @@ PIPELINE_MODULES = [
     "interaction_log", "privacy_migration", "main", "tts", "sounds",
     "audio_capture", "stt", "sensor", "bus", "hardware", "core_service",
     "dialog_service", "appointments", "callback", "help_alert", "channels", "family",
-    "device_api",
+    "device_api", "advice",
 ]
 
 # Environment variables that must not leak from the developer's shell

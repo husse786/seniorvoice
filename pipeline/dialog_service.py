@@ -20,8 +20,8 @@ setup_logging()
 log = get_logger("dialog")
 
 # Buttons answered in the dialog during a call (B3). "sprechen": the call is
-# already a conversation; "rat" follows in PR 9.
-SPOKEN_BUTTONS = ("familie", "heute", "kalender")
+# already a conversation.
+SPOKEN_BUTTONS = ("familie", "heute", "kalender", "rat")
 
 LLM_FAILED_REPLY = (
     "Entschuldigung, ich kann gerade nicht antworten. "
@@ -148,6 +148,38 @@ class DialogService:
             speak(text)
         self.state("idle")
 
+    def advice_question(self) -> None:
+        """Rat (B2): one question, answered only from entered information.
+
+        The question is neither stored nor logged and does not go into the
+        conversation history, so it never reaches the notes either.
+        """
+        import advice
+        from audio_capture import record_until_silence
+        from stt import transcribe
+        from tts import speak
+        from sounds import play_sound
+
+        self.state("speaking")
+        speak(advice.ASK)
+        play_sound("listen")
+        self.state("listening")
+        question = transcribe(record_until_silence()).strip()
+        if not self.active():
+            self.state("idle")
+            return
+        if not question:
+            self.state("speaking")
+            speak(advice.NOTHING_HEARD)
+            self.state("idle")
+            return
+        self.state("thinking")
+        answer = advice.answer_for(advice.find_item(question), question)
+        if self.active():
+            self.state("speaking")
+            speak(answer)
+        self.state("idle")
+
     def run_call(self) -> None:
         """One call: turns until the handset is hung up."""
         from config import MEMORY_TIMEOUT
@@ -172,6 +204,9 @@ class DialogService:
                     continue
                 if button in ("heute", "kalender"):
                     self.read_calendar(button)
+                    continue
+                if button == "rat":
+                    self.advice_question()
                     continue
                 run_pipeline.last_text = ""
                 history, pre_reset = run_pipeline(
