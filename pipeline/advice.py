@@ -9,10 +9,11 @@ it says "Fragen Sie Ihre Spitex oder Ihre Ärztin."
 
 T12 (team, 14.11.2026): if the question hints at an emergency (chest
 pain, breathlessness, a fall, unconsciousness ...), the device points to
-the Help button and 144 instead. This is decided by a fixed word list
-before the language model is asked, so it never depends on the model.
-The list is deliberately broad: a needless hint costs little, a missed
-emergency a lot.
+the Help button and 144 first. This is decided by a fixed word list and
+spoken before the language model is asked, so it never depends on the
+model. An entry that fits is still read afterwards (for example an entered
+emergency number). The list is deliberately broad: a needless hint costs
+one sentence, a missed emergency a lot.
 
 Why the language model never speaks here: a 1B model cannot be trusted to
 stay within a prompt instruction about medical topics. In Rat mode it only
@@ -54,21 +55,26 @@ HEALTH_QUESTION_TERMS = (
 EMERGENCY = ("Wenn es ein Notfall ist, drücken Sie sofort den Hilfe-Knopf "
              "oder rufen Sie 144 an.")
 
-# Lower case, umlauts folded (ae, oe, ue). Substrings, so "brustschmerzen"
-# and "schmerzen in der brust" are both caught by "brust".
+# Lower case, umlauts folded (ae, oe, ue, ss). Matched at the start of a
+# word: "sturz" finds "Sturz" and "Sturzgefahr", "taub" does not find "Staub".
 EMERGENCY_TERMS = (
     # chest, heart
     "brust", "herzinfarkt", "infarkt", "herzrasen", "herzstolpern", "herzschmerz",
-    "herzstechen", "herz tut weh", "herz rast",
+    "herzstechen", "herzdruck",
     # breathing
-    "atem", "atme", "luft", "erstick",
-    # falls
-    "sturz", "gestuerzt", "hingefallen", "umgefallen", "hinfallen", "gefallen",
-    "kann nicht aufstehen", "komme nicht hoch", "nicht mehr aufstehen", "liege am boden",
+    "atemnot", "luftnot", "keine luft", "kaum luft", "schlecht luft", "wenig luft",
+    "nach luft", "luft bekomm", "kann nicht atmen", "kann kaum atmen", "atmet nicht",
+    "atme schlecht", "atmen schlecht", "erstick",
+    # falls, accidents
+    "sturz", "gestuerzt", "hingefallen", "umgefallen", "hinfallen", "bin gefallen",
+    "ist gefallen", "ausgerutscht", "unfall", "kann nicht aufstehen",
+    "komme nicht hoch", "komme nicht mehr hoch", "nicht mehr aufstehen",
+    "am boden", "auf dem boden", "kann mich nicht bewegen", "kann mich nicht mehr bewegen",
     # consciousness, stroke
     "bewusstlos", "ohnmacht", "ohnmaechtig", "wird schwarz", "schwarz vor augen",
-    "schlaganfall", "hirnschlag", "laehm", "gelaehmt", "kann nicht sprechen",
-    "kann nicht mehr sprechen", "gesicht haengt", "taub", "verwirrt",
+    "reagiert nicht", "wacht nicht auf", "schlaganfall", "hirnschlag", "gelaehmt",
+    "laehmung", "kann nicht sprechen", "kann nicht mehr sprechen", "gesicht haengt",
+    "taub", "verwirrt",
     # bleeding, poisoning, other
     "blutet", "blutung", "viel blut", "erbricht blut", "blut erbrochen",
     "vergift", "zu viele tabletten", "zu viel genommen", "krampf", "anfall",
@@ -76,11 +82,17 @@ EMERGENCY_TERMS = (
     "notfall", "notarzt", "krankenwagen", "ambulanz", "rettung", "144",
     "hilfe", "sterbe", "sterben", "nicht mehr leben", "umbringen", "suizid",
 )
+# Matched anywhere in a word ("Nasenblutung", "Kreislaufkollaps")
+EMERGENCY_PARTS = ("infarkt", "blutung", "atemnot", "luftnot", "bewusstlos", "kollaps")
+# Both words in the same question ("Mein Herz schmerzt", "Druck auf der Brust")
+EMERGENCY_PAIRS = (("herz", "schmerz"), ("herz", "druck"), ("herz", "stech"),
+                   ("herz", "rast"), ("herz", "stolper"), ("herz", "weh"))
+_EMERGENCY_RE = re.compile(r"(?<![a-z0-9])(?:" + "|".join(re.escape(t) for t in EMERGENCY_TERMS) + ")")
 
 MAX_TOPIC = 80
 MAX_TEXT = 600
-MAX_ITEMS = 40
-SELECT_TIMEOUT = 20     # seconds; afterwards the word match decides          # keeps the selection prompt short on the Pi
+MAX_ITEMS = 40          # keeps the selection prompt short on the Pi
+SELECT_TIMEOUT = 20     # seconds; afterwards the word match decides
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS advice_items (
@@ -202,9 +214,13 @@ _STOPWORDS = {
 _FOLD = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 
 
-def _stems(text: str) -> set[str]:
+def _fold(text: str) -> str:
     text = unicodedata.normalize("NFC", text.lower()).translate(_FOLD)
-    words = re.findall(r"[a-z0-9]+", text)
+    return " ".join(re.findall(r"[a-z0-9]+", text))
+
+
+def _stems(text: str) -> set[str]:
+    words = _fold(text).split()
     # Five letters are enough to treat "Tablette" and "Tabletten" alike
     return {w[:5] for w in words if len(w) >= 4 and w not in _STOPWORDS}
 
@@ -286,29 +302,37 @@ def find_item(question: str, items: list[dict] | None = None, complete=None) -> 
 
 
 def is_health_question(question: str) -> bool:
-    text = question.lower()
+    text = _fold(question)
     return any(term in text for term in HEALTH_QUESTION_TERMS)
 
 
-def _fold(text: str) -> str:
-    text = unicodedata.normalize("NFC", text.lower()).translate(_FOLD)
-    return " ".join(re.findall(r"[a-z0-9]+", text))
-
-
 def is_emergency(question: str) -> bool:
+    """T12: word list only, never the model. Deliberately broad."""
     text = _fold(question)
-    return any(term in text for term in EMERGENCY_TERMS)
+    words = text.split()
+    if _EMERGENCY_RE.search(text):
+        return True
+    if any(part in w for w in words for part in EMERGENCY_PARTS):
+        return True
+    return any(any(w.startswith(a) for w in words) and any(b in w for w in words)
+               for a, b in EMERGENCY_PAIRS)
 
 
-def reply_for(question: str, complete=None) -> str:
-    """What the device says to a Rat question.
+def decide(question: str, items: list[dict] | None = None, complete=None) -> tuple[bool, dict | None]:
+    """(emergency?, entry or None) for a Rat question.
 
-    The emergency check comes first and uses only the word list (T12);
-    the model is then not asked at all.
+    The emergency hint does not replace an entry that fits: someone who asks
+    for the entered emergency number hears the hint and then the number.
     """
-    if is_emergency(question):
-        return EMERGENCY
-    return answer_for(find_item(question, complete=complete), question)
+    return is_emergency(question), find_item(question, items, complete)
+
+
+def reply_for(question: str, items: list[dict] | None = None, complete=None) -> list[str]:
+    """The sentences the device speaks, in order."""
+    emergency, item = decide(question, items, complete)
+    if emergency:
+        return [EMERGENCY] + ([answer_for(item, question)] if item else [])
+    return [answer_for(item, question)]
 
 
 def answer_for(item: dict | None, question: str = "") -> str:

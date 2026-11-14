@@ -173,11 +173,20 @@ class DialogService:
             speak(advice.NOTHING_HEARD)
             self.state("idle")
             return
-        self.state("thinking")
-        answer = advice.reply_for(question)
-        if self.active():
+        # T12: the emergency hint comes from the word list and is spoken
+        # before the model is asked
+        emergency = advice.is_emergency(question)
+        if emergency:
             self.state("speaking")
-            speak(answer)
+            speak(advice.EMERGENCY)
+        if not self.active():
+            self.state("idle")
+            return
+        self.state("thinking")
+        item = advice.find_item(question)
+        if self.active() and (item is not None or not emergency):
+            self.state("speaking")
+            speak(advice.answer_for(item, question))
         self.state("idle")
 
     def run_call(self) -> None:

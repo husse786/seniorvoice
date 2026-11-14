@@ -182,9 +182,41 @@ def test_fixed_questions_file_is_consistent():
 ])
 def test_emergency_words_point_to_help_and_144(advice, question):
     _seed(advice)
-    llm = _llm("2")
-    assert advice.reply_for(question, complete=llm) == advice.EMERGENCY
-    assert llm.calls == []                       # the model is not asked at all
+    assert advice.is_emergency(question)
+    assert advice.reply_for(question, complete=_llm("0")) == [advice.EMERGENCY]
+
+
+@pytest.mark.parametrize("question", [
+    "Mein Herz schmerzt", "Ich habe Schmerzen im Herz", "Ich hatte einen Unfall",
+    "Ich liege auf dem Boden", "Ich bin ausgerutscht", "Mein Mann reagiert nicht mehr",
+    "Ich kann mich nicht bewegen", "Ich habe Nasenbluten und eine Nasenblutung",
+])
+def test_more_emergency_phrasings(advice, question):
+    assert advice.is_emergency(question)
+
+
+@pytest.mark.parametrize("question", [
+    "Wann kommt die Haushaltshilfe?", "Ist die Physiotherapie heute ausgefallen?",
+    "Mir ist eingefallen, wann kommt die Spitex?", "Hat Ihnen das gefallen?",
+    "Wann soll ich Staub saugen?", "Wann kommt die Spitex?", "Wer bringt den Einkauf?",
+    "Wann muss ich die weisse Tablette nehmen?", "Wie ist das Wetter?",
+])
+def test_everyday_questions_are_not_emergencies(advice, question):
+    assert not advice.is_emergency(question)
+
+
+def test_emergency_hint_does_not_depend_on_the_model(advice):
+    _seed(advice)
+    assert advice.reply_for("Ich bin gestürzt", complete=_llm(TimeoutError())) == [advice.EMERGENCY]
+    assert advice.reply_for("Ich bin gestürzt", complete=_llm("Alles gut, ruhen Sie sich aus.")) == [advice.EMERGENCY]
+
+
+def test_entered_emergency_number_is_still_read(advice):
+    item_id = advice.add_item("Notfallnummer Hausarzt", "Notfallnummer: 044 000 00 09.", "Ihre Tochter")
+    items = advice.list_items()
+    sentences = advice.reply_for("Was ist die Notfallnummer meiner Ärztin?", items, _llm("1"))
+    assert sentences[0] == advice.EMERGENCY
+    assert sentences[1].endswith("Notfallnummer: 044 000 00 09.") and item_id
 
 
 def test_emergency_sentence(advice):
@@ -201,7 +233,7 @@ def test_fixed_questions_emergency_detection(advice):
 def test_emergency_is_not_logged(advice, caplog):
     _seed(advice)
     caplog.set_level(logging.DEBUG)
-    advice.reply_for("Ich bin gestürzt", complete=_llm("1"))
+    advice.reply_for("Ich bin gestürzt", advice.list_items(), _llm("1"))
     assert "gestürzt" not in caplog.text and "Notfall" not in caplog.text
 
 
@@ -240,9 +272,21 @@ def test_rat_reads_entry(env, monkeypatch):
 
 
 def test_rat_emergency_in_call(env, monkeypatch):
-    service, spoken = _dialog(env, monkeypatch, ["Ich habe starke Schmerzen in der Brust"])
+    service, spoken = _dialog(env, monkeypatch, ["Ich habe starke Schmerzen in der Brust"], llm_reply="0")
     service.advice_question()
-    assert spoken[-1] == "Wenn es ein Notfall ist, drücken Sie sofort den Hilfe-Knopf oder rufen Sie 144 an."
+    assert spoken[1:] == ["Wenn es ein Notfall ist, drücken Sie sofort den Hilfe-Knopf oder rufen Sie 144 an."]
+
+
+def test_rat_emergency_spoken_before_model_is_asked(env, monkeypatch):
+    service, spoken = _dialog(env, monkeypatch, ["Ich bin gestürzt"])
+    llm_backend = sys.modules["llm_backend"]
+
+    def complete(messages, timeout_override=None):
+        assert spoken[-1] == sys.modules["advice"].EMERGENCY   # already said
+        raise TimeoutError()
+    monkeypatch.setattr(llm_backend, "complete", complete)
+    service.advice_question()
+    assert spoken[-1] == sys.modules["advice"].EMERGENCY
 
 
 def test_rat_without_entry_refers_to_spitex(env, monkeypatch):

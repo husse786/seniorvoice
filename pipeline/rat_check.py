@@ -37,11 +37,8 @@ def main() -> int:
 
     failed = 0
     for q in data["fragen"]:
-        if advice.is_emergency(q["frage"]):      # word list only, as on the device
-            got = "notfall"
-        else:
-            item = advice.find_item(q["frage"], items)
-            got = number[item["id"]] if item else 0
+        emergency, item = advice.decide(q["frage"], items)
+        got = "notfall" if emergency else (number[item["id"]] if item else 0)
         ok = got == q["erwartet"] or got in q.get("erlaubt", [])
         failed += not ok
         print(f"{'OK   ' if ok else 'FEHLER'}  {q['gruppe']:16}  erwartet {q['erwartet']}, gewählt {got}  {q['frage']}")
