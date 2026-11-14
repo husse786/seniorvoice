@@ -7,11 +7,12 @@ import threading
 import time
 from pathlib import Path
 
-from config import MEMORY_DB_PATH, LLM_TIMEOUT, LLM_BACKENDS, LLM_API_KEY
+from config import MEMORY_DB_PATH, LLM_TIMEOUT, MEMORY_EXTRACTION_ENABLED
 from llm_backend import complete as llm_complete
-from logging_config import get_logger
+from logging_config import get_logger, get_content_logger
 
 log = get_logger("memory")
+content_log = get_content_logger("memory")
 
 _EXTRACTION_RETRIES = 2   # total attempts
 _PENDING_DIR = Path(MEMORY_DB_PATH).parent / "pending_extractions"
@@ -145,7 +146,7 @@ def _parse_facts_json(raw: str) -> list[dict]:
     markdown fences, trailing commas, single quotes.
     """
     text = raw.strip()
-    log.debug("Raw extraction response: %s", text[:500])
+    content_log.debug("Raw extraction response: %s", text[:500])
 
     # Strip markdown code fences if present
     text = re.sub(r"```(?:json)?\s*", "", text).strip()
@@ -162,7 +163,8 @@ def _parse_facts_json(raw: str) -> list[dict]:
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        log.warning("Failed to parse facts JSON: %s", text[:300])
+        log.warning("Failed to parse facts JSON (%d chars)", len(text))
+        content_log.debug("Unparseable facts JSON: %s", text[:300])
         return []
 
     if not isinstance(parsed, list):
@@ -236,10 +238,8 @@ def extract_and_store_facts(history: list[dict], source: str = "") -> None:
     """
     if not history:
         return
-    # Skip if no backend can handle extraction:
-    # - "default" mode needs an API key (cloud-only)
-    # - named backends (e.g. "ollama,kimi") have their own config
-    if LLM_BACKENDS == "default" and not LLM_API_KEY:
+    # Off until 7-day retention and the health-data filter exist (A8, PR 2).
+    if not MEMORY_EXTRACTION_ENABLED:
         return
 
     success = _do_extract(history, source)
@@ -249,7 +249,7 @@ def extract_and_store_facts(history: list[dict], source: str = "") -> None:
 
 def extract_facts_async(history: list[dict], source: str = "") -> None:
     """Fire-and-forget fact extraction in a background thread."""
-    if not history:
+    if not history or not MEMORY_EXTRACTION_ENABLED:
         return
 
     history_copy = [msg.copy() for msg in history]
@@ -264,4 +264,6 @@ def extract_facts_async(history: list[dict], source: str = "") -> None:
 
 def retry_pending_extractions() -> None:
     """Called on startup to process any pending extractions from previous runs."""
+    if not MEMORY_EXTRACTION_ENABLED:
+        return
     _process_pending()

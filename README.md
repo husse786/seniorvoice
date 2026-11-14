@@ -20,6 +20,20 @@ Team: Yanick · Christopher · Sansone · Haris
 
 ---
 
+## HS26: Datenschutz-Standard (ab 14.11.2026)
+
+Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 gilt ohne jede Einstellung:
+
+- **Sprachmodell nur lokal:** Standard ist Ollama auf dem Gerät (`http://127.0.0.1:11434/v1`, `gemma3:1b`). Adressen ausserhalb des Geräts werden abgelehnt, solange `ALLOW_CLOUD_LLM` nicht ausdrücklich gesetzt ist. Der Kimi-Rückfall aus FS26 ist kein Standard mehr.
+- **Keine Gesprächstexte in Logdateien und Datenbank:** `interactions` speichert nur Messwerte. Gesprächstext erscheint höchstens auf der Konsole, und nur mit `LOG_CONTENT=true` (Entwicklung).
+- **Antwort-Audio nur im RAM** (`/dev/shm/seniorvoice`) und nach dem Abspielen gelöscht.
+- **Altdaten aus FS26** (Gesprächstexte, Fakten, Pending-Dateien, alte Logs) werden beim ersten Start einmalig gelöscht.
+- Fakten-Gedächtnis ist bis PR 2 (7-Tage-Frist) ausgeschaltet.
+
+Alle Einstellungen: [`.env.example`](.env.example). Tests: `pip install -r requirements-dev.txt && pytest`.
+
+---
+
 ## Repo-Struktur
 
 ```
@@ -134,7 +148,7 @@ Vollständige Ergebnisse: [model_comparisson.md](docs/models/model_comparisson.m
 - **Session Memory** — Multi-Turn-Konversation mit 5-Minuten-Timeout
 - **Long-Term Memory** — SQLite-basiert, merkt sich Fakten über Benutzer
 - **Audio-Feedback** — Chimes signalisieren "höre zu" / "denke nach"
-- **LLM-Fallback-Chain** — Ollama → Kimi, konfigurierbar via Env-Vars
+- **LLM-Fallback-Chain** — Ollama → Kimi, konfigurierbar via Env-Vars (FS26; seit HS26 nur lokal, siehe oben)
 - **Structured Logging** — RotatingFileHandler (5 MB × 5 Backups)
 - **Interaction Logs** — Timing-Daten (STT/LLM/TTS) in SQLite, Grafana-ready
 
@@ -242,8 +256,7 @@ scp pipeline/datei.py yanick@<PI_IP>:/tmp/
 sudo cp /tmp/*.py /home/admin/seniorvoice/pipeline/
 cd ~/seniorvoice/pipeline
 source ../.venv/bin/activate
-export LLM_API_KEY=<key>
-python main.py --no-pir --once
+python main.py --no-pir --once   # läuft lokal, kein API-Key nötig
 ```
 
 ### 7 — Projektdokumentation

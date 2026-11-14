@@ -1,4 +1,10 @@
-"""SQLite interaction logger — records each pipeline turn for analytics/Grafana."""
+"""SQLite interaction logger — records metrics of each pipeline turn for Grafana.
+
+Decision A8 / F1 (14.11.2026): conversation text is never stored. Only
+timings, trigger type and error codes are written. The columns user_text and
+response_text stay in the schema (always empty) so existing databases and the
+Grafana dashboards keep working.
+"""
 
 import sqlite3
 from pathlib import Path
@@ -32,23 +38,21 @@ def _get_connection() -> sqlite3.Connection:
 
 def log_interaction(
     trigger_type: str,
-    user_text: str = "",
-    response_text: str = "",
     stt_duration_ms: int | None = None,
     llm_duration_ms: int | None = None,
     tts_duration_ms: int | None = None,
     total_duration_ms: int | None = None,
     error: str | None = None,
 ) -> None:
-    """Log a single interaction to the SQLite database."""
+    """Log the metrics of a single interaction (no conversation text)."""
     conn = _get_connection()
     try:
         conn.execute(
             "INSERT INTO interactions "
-            "(trigger_type, user_text, response_text, stt_duration_ms, "
+            "(trigger_type, stt_duration_ms, "
             "llm_duration_ms, tts_duration_ms, total_duration_ms, error) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (trigger_type, user_text, response_text, stt_duration_ms,
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (trigger_type, stt_duration_ms,
              llm_duration_ms, tts_duration_ms, total_duration_ms, error),
         )
         conn.commit()

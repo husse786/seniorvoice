@@ -3,10 +3,11 @@
 import re
 
 from config import MEMORY_MAX_TURNS
-from logging_config import get_logger
+from logging_config import get_logger, get_content_logger
 from llm_backend import complete as llm_complete, stream as llm_stream
 
 log = get_logger("llm")
+content_log = get_content_logger("llm")
 
 _BASE_SYSTEM_PROMPT = (
     "Du bist SeniorAgent, ein freundlicher und geduldiger Sprachassistent "
@@ -118,7 +119,7 @@ def chat_streaming(user_message: str, history: list[dict] | None = None, facts_b
             buffer = buffer[end_pos:]
 
             if sentence:
-                log.debug("Speaking sentence: %s", sentence[:80])
+                content_log.debug("Speaking sentence: %s", sentence[:80])
                 speak(sentence)
 
             match = _SENTENCE_END.search(buffer)
@@ -126,7 +127,7 @@ def chat_streaming(user_message: str, history: list[dict] | None = None, facts_b
     # Speak any remaining text
     remainder = buffer.strip()
     if remainder:
-        log.debug("Speaking remainder: %s", remainder[:80])
+        content_log.debug("Speaking remainder: %s", remainder[:80])
         speak(remainder)
 
     log.debug("Streaming complete (%d chars total)", len(full_reply))

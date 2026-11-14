@@ -6,8 +6,11 @@ import urllib.request
 import urllib.error
 from dataclasses import dataclass
 from typing import Generator
+from urllib.parse import urlparse
 
-from config import LLM_BACKENDS, LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_TIMEOUT
+from config import (
+    LLM_BACKENDS, LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_TIMEOUT, ALLOW_CLOUD_LLM,
+)
 from logging_config import get_logger
 
 log = get_logger("llm_backend")
@@ -24,11 +27,41 @@ class BackendConfig:
     timeout: int
 
 
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+class CloudBackendRefused(RuntimeError):
+    """Raised when a non-local LLM backend is configured but cloud is not allowed."""
+
+
+def is_local(api_base: str) -> bool:
+    """True if the API base URL points to this device (loopback only)."""
+    host = (urlparse(api_base).hostname or "").lower()
+    return host in _LOCAL_HOSTS
+
+
+def _check_allowed(backend: BackendConfig) -> None:
+    """Refuse non-local backends unless ALLOW_CLOUD_LLM is set (decision A1)."""
+    if is_local(backend.api_base):
+        return
+    if not ALLOW_CLOUD_LLM:
+        raise CloudBackendRefused(
+            f"Backend '{backend.name}' is not local ({urlparse(backend.api_base).hostname}); "
+            "refused because ALLOW_CLOUD_LLM is not set. Nothing was sent."
+        )
+    log.warning(
+        "Backend '%s' is NOT local (%s): conversation data leaves the device "
+        "(ALLOW_CLOUD_LLM=true). Never use this on a senior's device.",
+        backend.name, urlparse(backend.api_base).hostname,
+    )
+
+
 def _resolve_backends() -> list[BackendConfig]:
     """Parse LLM_BACKENDS env var into ordered list of BackendConfig.
 
     - "default": uses the global LLM_API_BASE/KEY/MODEL/TIMEOUT vars.
-    - "ollama,kimi": resolves LLM_OLLAMA_* and LLM_KIMI_* env vars.
+    - "a,b": resolves LLM_A_* and LLM_B_* env vars; missing values fall back
+      to the global settings (local Ollama by default).
     """
     raw = LLM_BACKENDS.strip()
     if raw == "default":
@@ -104,6 +137,12 @@ def complete(messages: list[dict], timeout_override: int | None = None) -> str:
     for backend in backends:
         timeout = timeout_override if timeout_override is not None else backend.timeout
         try:
+            _check_allowed(backend)
+        except CloudBackendRefused as e:
+            log.error("%s", e)
+            last_error = e
+            continue
+        try:
             log.debug("Trying backend '%s' (model=%s)", backend.name, backend.model)
             response = _do_complete(backend, messages, timeout)
             log.info("Backend '%s' responded (%d chars)", backend.name, len(response))
@@ -126,6 +165,12 @@ def stream(messages: list[dict]) -> Generator[str, None, None]:
     last_error: Exception | None = None
 
     for backend in backends:
+        try:
+            _check_allowed(backend)
+        except CloudBackendRefused as e:
+            log.error("%s", e)
+            last_error = e
+            continue
         try:
             log.debug("Streaming from backend '%s' (model=%s)", backend.name, backend.model)
             yield from _do_stream(backend, messages)
