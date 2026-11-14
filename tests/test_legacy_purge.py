@@ -109,3 +109,28 @@ def test_leftover_audio_removed_on_every_start(env):
     leftover.write_bytes(b"RIFF")
     privacy.run_legacy_purge()
     assert not leftover.exists()
+
+
+def test_purge_failure_is_not_marked_done(env, monkeypatch):
+    legacy_out = _create_fs26_leftovers(env)
+    privacy = env.load("privacy_migration")
+    monkeypatch.setattr(privacy, "_LEGACY_OUTPUT_DIR", legacy_out)
+
+    def broken_rmtree(path):
+        raise PermissionError("read-only")
+    monkeypatch.setattr(privacy.shutil, "rmtree", broken_rmtree)
+    import pytest
+    with pytest.raises(PermissionError):
+        privacy.run_legacy_purge()
+    conn = sqlite3.connect(env.db_path)
+    assert conn.execute("SELECT COUNT(*) FROM privacy_meta").fetchone()[0] == 0
+    conn.close()
+
+
+def test_blocked_checkpoint_refuses_start(env, monkeypatch):
+    _create_fs26_leftovers(env)
+    privacy = env.load("privacy_migration")
+    monkeypatch.setattr(privacy, "checkpoint_truncate", lambda conn, retries=10: False)
+    import pytest
+    with pytest.raises(RuntimeError):
+        privacy.run_legacy_purge()

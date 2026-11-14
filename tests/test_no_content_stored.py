@@ -10,6 +10,8 @@ import json
 import sys
 import types
 
+from conftest import patch_http
+
 USER_SENTENCE = "Mein Blutdruck ist heute 180 zu 110 Testsatz4711"
 ANSWER = "Bitte rufen Sie Ihre Hausaerztin an Antwortsatz0815"
 
@@ -22,17 +24,39 @@ class _FakeResponse(io.BytesIO):
         return False
 
 
+def _silent_wav() -> bytes:
+    import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(b"\x00\x00" * 1600)
+    return buf.getvalue()
+
+
 def _install_fakes(monkeypatch, spoken):
+    """Fake hardware and models; the real stt.py wrapper is used (with a fake Whisper)."""
     audio = types.ModuleType("audio_capture")
-    audio.record_until_silence = lambda: b"RIFF-fake"
-    stt = types.ModuleType("stt")
-    stt.transcribe = lambda wav: USER_SENTENCE
-    stt.get_model = lambda: None
+    audio.record_until_silence = _silent_wav
+
+    class FakeWhisper:
+        def __init__(self, *a, **k):
+            pass
+
+        def transcribe(self, audio, **kwargs):
+            seg = types.SimpleNamespace(text=USER_SENTENCE)
+            info = types.SimpleNamespace(language="de", language_probability=0.98)
+            return [seg], info
+
+    faster_whisper = types.ModuleType("faster_whisper")
+    faster_whisper.WhisperModel = FakeWhisper
     tts = types.ModuleType("tts")
     tts.speak = lambda text: spoken.append(text)
     tts.play = lambda path: None
-    for name, mod in [("audio_capture", audio), ("stt", stt), ("tts", tts)]:
+    for name, mod in [("audio_capture", audio), ("faster_whisper", faster_whisper), ("tts", tts)]:
         monkeypatch.setitem(sys.modules, name, mod)
+    sys.modules.pop("stt", None)  # import the real stt.py with the fake model
     monkeypatch.setattr("builtins.input", lambda *a: "")
 
 
@@ -48,7 +72,7 @@ def _run_one_turn(env, monkeypatch, **extra_env):
         body = {"choices": [{"message": {"content": ANSWER}}]}
         return _FakeResponse(json.dumps(body).encode("utf-8"))
 
-    monkeypatch.setattr(llm_backend.urllib.request, "urlopen", urlopen)
+    patch_http(llm_backend, monkeypatch, urlopen)
 
     main.run_legacy_purge()
     history, _ = main.run_pipeline(use_pir=False, history=[])

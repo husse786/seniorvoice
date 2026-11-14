@@ -116,7 +116,7 @@ def _purge_files() -> None:
     pending_dir = Path(MEMORY_DB_PATH).parent / "pending_extractions"
     if pending_dir.exists():
         count = len(list(pending_dir.glob("*.json")))
-        shutil.rmtree(pending_dir, ignore_errors=True)
+        shutil.rmtree(pending_dir)  # errors propagate: purge must not be marked done
         log.info("Legacy purge: removed %d pending extraction file(s)", count)
 
     # Old log files contain "User said" / "Response" in plain text.
@@ -157,6 +157,11 @@ def run_legacy_purge() -> None:
     if already_done:
         return
 
+    # Any failure stops the start: the device must not run while legacy
+    # conversation data may still be on it. The purge is retried next start.
     _purge_files()  # clears old log files first, so the lines below survive
     log.info("Legacy purge: removing conversation data stored by the FS26 version")
-    _purge_database()
+    if not _purge_database():
+        raise RuntimeError(
+            "Legacy purge incomplete (WAL checkpoint blocked); refusing to start"
+        )

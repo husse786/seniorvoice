@@ -158,7 +158,11 @@ def main():
 
     # One-time removal of conversation data stored by the FS26 version
     # (decision F2, 14.11.2026). Idempotent; does nothing after the first run.
-    run_legacy_purge()
+    try:
+        run_legacy_purge()
+    except Exception as e:
+        log.critical("Legacy purge failed, not starting: %s", e)
+        sys.exit(1)
 
     # Pre-load the STT model on startup
     from stt import get_model

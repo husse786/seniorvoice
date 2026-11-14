@@ -56,6 +56,18 @@ def _check_allowed(backend: BackendConfig) -> None:
     )
 
 
+# Local backends never go through an HTTP proxy: urllib would otherwise honour
+# http_proxy/HTTPS_PROXY from the environment and send the conversation to the
+# proxy host, even for a 127.0.0.1 URL.
+_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def _open(backend: BackendConfig, req: urllib.request.Request, timeout: int):
+    if is_local(backend.api_base):
+        return _NO_PROXY_OPENER.open(req, timeout=timeout)
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
 def _resolve_backends() -> list[BackendConfig]:
     """Parse LLM_BACKENDS env var into ordered list of BackendConfig.
 
@@ -93,7 +105,7 @@ def _do_complete(backend: BackendConfig, messages: list[dict], timeout: int) -> 
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
 
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _open(backend, req, timeout) as resp:
         data = json.loads(resp.read().decode("utf-8"))
         return data["choices"][0]["message"]["content"]
 
@@ -110,7 +122,7 @@ def _do_stream(backend: BackendConfig, messages: list[dict]) -> Generator[str, N
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
 
-    with urllib.request.urlopen(req, timeout=backend.timeout) as resp:
+    with _open(backend, req, backend.timeout) as resp:
         for raw_line in resp:
             line = raw_line.decode("utf-8").strip()
             if not line.startswith("data: "):

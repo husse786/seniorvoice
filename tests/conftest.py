@@ -63,6 +63,13 @@ class PipelineEnv:
         return [p for p in self.all_files() if data in p.read_bytes()]
 
 
+def patch_http(backend_module, monkeypatch, urlopen):
+    """Replace both HTTP paths of llm_backend (local no-proxy opener and urlopen)."""
+    monkeypatch.setattr(backend_module.urllib.request, "urlopen", urlopen)
+    fake_opener = type("FakeOpener", (), {"open": staticmethod(urlopen)})()
+    monkeypatch.setattr(backend_module, "_NO_PROXY_OPENER", fake_opener)
+
+
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     for key in _ENV_TO_CLEAR:
