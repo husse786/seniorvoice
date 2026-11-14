@@ -34,6 +34,7 @@ Requests: header "Authorization: Bearer <device token>" (the portal) and
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import re
 import sqlite3
@@ -59,8 +60,9 @@ MAX_BODY = 4096
 MAX_TITLE = 200
 MAX_PRE_MINUTES = 24 * 60
 PERSON_ID = re.compile(r"^[A-Za-z0-9._@-]{1,64}$")
-WILDCARD_HOSTS = ("0.0.0.0", "::", "")
 LOCAL_FORMAT = "%Y-%m-%d %H:%M"
+MAX_AHEAD_DAYS = 2 * 366
+UNAUTH_LOG_SECONDS = 60      # failed tokens: journal warning at most once a minute
 
 _SCHEMA = """\
 CREATE TABLE IF NOT EXISTS access_grants (
@@ -83,17 +85,17 @@ CREATE INDEX IF NOT EXISTS idx_audit_person ON audit_log(person_id, at);
 """
 
 
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _iso(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+_now = appointments._now_utc
+_iso = appointments._iso
+_schema_ready = False
 
 
 def _conn() -> sqlite3.Connection:
+    global _schema_ready
     conn = appointments.connect()
-    conn.executescript(_SCHEMA)
+    if not _schema_ready:
+        conn.executescript(_SCHEMA)
+        _schema_ready = True
     return conn
 
 
@@ -224,11 +226,10 @@ def _appointment_view(a: dict, person_id: str) -> dict:
 
 
 def _help_view() -> list[dict]:
+    # No "notified contact": the list may have changed since the alert
     import help_alert
-    contacts = {c["position"]: c["name"] for c in help_alert.get_contacts()}
     return [{"id": a["id"], "created_at": a["created_at"], "status": a["status"],
-             "contact": contacts.get(a["contact_pos"]), "delivered": bool(a["delivered"]),
-             "acknowledged_by": a["acknowledged_by"]}
+             "delivered": bool(a["delivered"]), "acknowledged_by": a["acknowledged_by"]}
             for a in help_alert.list_alerts()]
 
 
@@ -243,11 +244,17 @@ def _parse_due(value) -> datetime:
     if not isinstance(value, str):
         raise ApiError(400, "due_local: text \"YYYY-MM-DD HH:MM\"")
     try:
-        due = datetime.strptime(value, LOCAL_FORMAT).replace(tzinfo=appointments.LOCAL_TZ)
+        naive = datetime.strptime(value, LOCAL_FORMAT)
     except ValueError:
         raise ApiError(400, "due_local: \"YYYY-MM-DD HH:MM\"") from None
+    due = naive.replace(tzinfo=appointments.LOCAL_TZ)
+    roundtrip = due.astimezone(timezone.utc).astimezone(appointments.LOCAL_TZ)
+    if roundtrip.replace(tzinfo=None) != naive:
+        raise ApiError(400, "due_local does not exist (clock change)")
     if due < _now() - timedelta(minutes=1):
         raise ApiError(400, "due_local is in the past")
+    if due > _now() + timedelta(days=MAX_AHEAD_DAYS):
+        raise ApiError(400, "due_local is too far ahead")
     return due
 
 
@@ -277,6 +284,7 @@ class Handler(BaseHTTPRequestHandler):
     timeout = 10
     token_sha256 = ""            # set by make_server()
     started = time.monotonic()
+    _last_unauth_log = 0.0
 
     def log_message(self, fmt, *args):
         pass                     # the access log on the device replaces the HTTP log
@@ -299,6 +307,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if status >= 400:
+            # A body may be left unread: never reuse this connection
+            self.send_header("Connection", "close")
+            self.close_connection = True
         self.end_headers()
         self.wfile.write(body)
 
@@ -327,7 +339,9 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         match = _APPT_ID.match(path)
         route = "/v1/appointments/{id}" if match else path
-        action = f"{method} {route}"
+        known = route in ("/v1/status", "/v1/audit", "/v1/appointments",
+                          "/v1/appointments/{id}", "/v1/help")
+        action = f"{method} {route if known else '(unknown)'}"
         target = match.group(1) if match else None
         person_id = self.headers.get("X-Person-Id", "").strip()
         if not PERSON_ID.match(person_id):
@@ -335,8 +349,14 @@ class Handler(BaseHTTPRequestHandler):
         status = 500
         try:
             if not self._authorized():
-                person_id = "-"     # unverified claim: never write into someone's log
-                raise ApiError(401, "unauthorized")
+                # Not the portal: nothing is written to the device database
+                # (anyone on the network could fill it), only a rare journal line
+                now = time.monotonic()
+                if now - Handler._last_unauth_log > UNAUTH_LOG_SECONDS:
+                    Handler._last_unauth_log = now
+                    log.warning("Device API: request without valid token")
+                self._send(401, {"error": "unauthorized"})
+                return
             person = _get_grant(person_id) if person_id != "-" else None
             if person is None:
                 raise ApiError(403, "no access to this device")
@@ -401,10 +421,18 @@ class Handler(BaseHTTPRequestHandler):
         return 200, {"id": existing["id"]}
 
 
+def _check_host(host: str) -> None:
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        raise ValueError("DEVICE_API_HOST must be an IP address (the tunnel address)") from None
+    if address.is_unspecified:
+        raise ValueError("DEVICE_API_HOST must be the tunnel address, not all interfaces")
+
+
 def make_server(host: str = DEVICE_API_HOST, port: int = DEVICE_API_PORT,
                 token_sha256: str = DEVICE_API_TOKEN_SHA256) -> ThreadingHTTPServer:
-    if host in WILDCARD_HOSTS:
-        raise ValueError("DEVICE_API_HOST must be the tunnel address, not all interfaces")
+    _check_host(host)
     if not re.fullmatch(r"[0-9a-f]{64}", token_sha256 or ""):
         raise ValueError("DEVICE_API_TOKEN_SHA256 missing or invalid (device_api_cli.py token)")
     handler = type("ConfiguredHandler", (Handler,),

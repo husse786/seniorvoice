@@ -81,24 +81,33 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# PR 10: created_by_id = portal account that entered it (NULL = senior or
+# device setup); only this account may change or delete it (B5).
+# pre_minutes = chosen pre-reminder, kept when the time is changed.
+_ADDED_COLUMNS = (("created_by_id", "TEXT"), ("pre_minutes", "INTEGER"))
+_schema_ready: set[str] = set()
+
+
 def connect() -> sqlite3.Connection:
     path = Path(MEMORY_DB_PATH)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path), timeout=5.0)
-    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA secure_delete=ON")
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(_SCHEMA)
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(appointments)")}
-    if "created_by_id" not in columns:
-        # PR 10: portal account that entered it; NULL = senior or device setup.
-        # Only this account may change or delete it (B5).
-        try:
-            conn.execute("ALTER TABLE appointments ADD COLUMN created_by_id TEXT")
-            conn.commit()
-        except sqlite3.OperationalError as e:
-            if "duplicate column" not in str(e):   # other process was faster
-                raise
+    if str(path) not in _schema_ready:       # once per process and database
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.executescript(_SCHEMA)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(appointments)")}
+        for name, sql_type in _ADDED_COLUMNS:
+            if name in columns:
+                continue
+            try:
+                conn.execute(f"ALTER TABLE appointments ADD COLUMN {name} {sql_type}")
+                conn.commit()
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e):   # other process was faster
+                    raise
+        _schema_ready.add(str(path))
     return conn
 
 
@@ -146,9 +155,9 @@ def add_appointment(title: str, due_local: datetime, created_by: str,
     try:
         cur = conn.execute(
             "INSERT INTO appointments (kind, title, due_at, created_by, created_by_id, "
-            "created_at, delete_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (kind, title.strip(), _iso(due), created_by.strip(), created_by_id, _iso(now),
-             _iso(due + timedelta(days=RETENTION_DAYS))),
+            "pre_minutes, created_at, delete_after) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (kind, title.strip(), _iso(due), created_by.strip(), created_by_id, pre_minutes,
+             _iso(now), _iso(due + timedelta(days=RETENTION_DAYS))),
         )
         appt_id = cur.lastrowid
         _insert_reminders(conn, appt_id, due, pre_minutes, now)
@@ -175,32 +184,35 @@ def get_appointment(appt_id: int) -> dict | None:
 def update_appointment(appt_id: int, title: str | None = None,
                        due_local: datetime | None = None, pre_minutes: int | None = None,
                        now: datetime | None = None) -> bool:
-    """Change text and/or time. Reminders are planned anew (status reset).
+    """Change text and/or time. False if the appointment does not exist.
 
-    A reminder that is ringing right now stops on the next scheduler tick,
-    because its row is replaced. False if the appointment does not exist.
+    Only the text: reminders keep their status (nothing rings again).
+    New time or pre-reminder: reminders are planned anew; one that is
+    ringing right now stops on the next scheduler tick (its row is replaced).
     """
     now = now or _now_utc()
+    if title is not None and not title.strip():
+        raise ValueError("title is required")
     conn = connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
-        row = conn.execute("SELECT kind, title, due_at FROM appointments WHERE id = ?",
+        row = conn.execute("SELECT kind, due_at, pre_minutes FROM appointments WHERE id = ?",
                            (appt_id,)).fetchone()
         if row is None:
             conn.rollback()
             return False
-        kind, old_title, old_due = row
-        new_title = old_title if title is None else title.strip()
-        if not new_title:
-            conn.rollback()
-            raise ValueError("title is required")
-        due = _parse(old_due) if due_local is None else _to_utc(due_local)
-        conn.execute(
-            "UPDATE appointments SET title = ?, due_at = ?, delete_after = ? WHERE id = ?",
-            (new_title, _iso(due), _iso(due + timedelta(days=RETENTION_DAYS)), appt_id),
-        )
-        conn.execute("DELETE FROM reminders WHERE appointment_id = ?", (appt_id,))
-        _insert_reminders(conn, appt_id, due, _pre_minutes(kind, pre_minutes), now)
+        kind, old_due, old_pre = row
+        if title is not None:
+            conn.execute("UPDATE appointments SET title = ? WHERE id = ?", (title.strip(), appt_id))
+        if due_local is not None or pre_minutes is not None:
+            due = _parse(old_due) if due_local is None else _to_utc(due_local)
+            pre = _pre_minutes(kind, pre_minutes if pre_minutes is not None else old_pre)
+            conn.execute(
+                "UPDATE appointments SET due_at = ?, pre_minutes = ?, delete_after = ? WHERE id = ?",
+                (_iso(due), pre, _iso(due + timedelta(days=RETENTION_DAYS)), appt_id),
+            )
+            conn.execute("DELETE FROM reminders WHERE appointment_id = ?", (appt_id,))
+            _insert_reminders(conn, appt_id, due, pre, now)
         conn.commit()
         return True
     finally:
@@ -241,7 +253,8 @@ def list_appointments() -> list[dict]:
 
 
 def _reminder_exists(reminder_id: int) -> bool:
-    conn = connect()
+    # Called every second while ringing: plain connection, no schema work
+    conn = sqlite3.connect(str(Path(MEMORY_DB_PATH)), timeout=5.0)
     try:
         return conn.execute("SELECT 1 FROM reminders WHERE id = ?",
                             (reminder_id,)).fetchone() is not None

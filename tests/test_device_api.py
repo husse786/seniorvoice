@@ -40,6 +40,7 @@ def api(env):
             return e.code, json.loads(e.read())
 
     call.module = device_api
+    call.base = base
     call.appointments = __import__("appointments")
     yield call
     server.shutdown()
@@ -54,8 +55,9 @@ def test_refuses_to_start_open_or_on_all_interfaces(env):
     device_api = env.load("device_api")
     with pytest.raises(ValueError):
         device_api.make_server("127.0.0.1", 0, "")
-    with pytest.raises(ValueError):
-        device_api.make_server("0.0.0.0", 0, device_api.token_hash(TOKEN))
+    for host in ("0.0.0.0", "::", "0", "", "my-pi.local"):
+        with pytest.raises(ValueError):
+            device_api.make_server(host, 0, device_api.token_hash(TOKEN))
 
 
 def test_token_and_grant_are_both_required(api):
@@ -143,7 +145,7 @@ def test_every_access_is_logged_without_content(api):
     actions = [(e["person_id"], e["action"], e["result"]) for e in entries]
     assert ("sandra", "POST /v1/appointments", 201) in actions
     assert ("stranger", "GET /v1/appointments", 403) in actions
-    assert ("-", "GET /v1/status", 401) in actions
+    assert not any(e["result"] == 401 for e in entries)                  # no flooding
     assert "Geheimer" not in json.dumps(entries)
     api("GET", "/v1/appointments", person="mueller")
     own = api("GET", "/v1/audit", person="mueller")[1]["entries"]
@@ -192,3 +194,37 @@ def test_update_replans_reminders(env):
     rems = a.list_appointments()[0]["reminders"]
     assert [r["stage"] for r in rems] == ["main"]                        # pre would be in the past
     assert a.update_appointment(999, title="x") is False
+
+
+def test_text_change_does_not_ring_again(env):
+    a = env.load("appointments")
+    now = datetime.now(timezone.utc)
+    appt = a.add_appointment("Arzt", (now + timedelta(hours=3)).astimezone(ZH), "Spitex",
+                             pre_minutes=0, created_by_id="x")
+    conn = a.connect()
+    conn.execute("UPDATE reminders SET status = 'bestaetigt', attempts = 1")
+    conn.commit()
+    conn.close()
+    assert a.update_appointment(appt, title="Arzt Dr. Meier")
+    rems = a.list_appointments()[0]["reminders"]
+    assert [(r["stage"], r["status"]) for r in rems] == [("main", "bestaetigt")]
+    # new time keeps the chosen "no pre-reminder"
+    assert a.update_appointment(appt, due_local=(now + timedelta(hours=5)).astimezone(ZH))
+    assert [r["stage"] for r in a.list_appointments()[0]["reminders"]] == ["main"]
+
+
+def test_error_closes_connection_and_dates_are_checked(api):
+    assert api("POST", "/v1/appointments",
+               body={"title": "A", "due_local": "9999-12-31 23:59"})[0] == 400
+    assert api("POST", "/v1/appointments",
+               body={"title": "A", "due_local": "2027-03-28 02:30"})[0] == 400    # clock change
+    import http.client
+    port = int(api.base.rsplit(":", 1)[1])
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    conn.request("PUT", "/v1/appointments/1", body=b'{"title": "x"}',
+                 headers={"Authorization": f"Bearer {TOKEN}", "X-Person-Id": "mueller",
+                          "Content-Type": "application/json"})
+    resp = conn.getresponse()
+    assert resp.status == 404 and resp.getheader("Connection") == "close"
+    resp.read()
+    conn.close()

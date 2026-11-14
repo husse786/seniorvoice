@@ -11,7 +11,7 @@ Grundlage: Entscheide B4, B5, A16–A18 (14.11.2026) und `05_SOLL_Architektur.md
 - Angehörige und Spitex sehen **Termine, Erinnerungsstatus und (wenn freigegeben) den Help-Verlauf**. Keine Gespräche, kein Gedächtnis, keine Rat-Fragen, keine Rückrufe (diese entstehen aus Gesprächen). Admin sieht nur Technik (B5).
 - Jeder Termin zeigt, **wer ihn eingetragen hat**. Ändern und löschen darf nur diese Person. Termine der Seniorin/des Seniors (ohne Portal-Konto eingetragen) ändert niemand über das Portal (B5).
 - **Doppelte Prüfung:** das Portal prüft die Rolle, das Gerät prüft selbst die Freigabeliste auf dem Gerät.
-- **Zugriffsprotokoll auf dem Gerät:** jede Anfrage (wer, wann, welche Funktion, Ergebnis), ohne Inhalte. Jede Person sieht ihre eigenen Einträge, Admin alle. Frist 30 Tage als Vorschlag (DS-07 offen, `AUDIT_RETENTION_DAYS`).
+- **Zugriffsprotokoll auf dem Gerät:** jede Anfrage des Portals (wer, wann, welche Funktion, Ergebnis), ohne Inhalte. Anfragen ohne gültigen Gerätetoken werden nicht in die Datenbank geschrieben (sonst könnte jeder im Netz sie füllen), nur höchstens einmal pro Minute im Systemprotokoll vermerkt. Jede Person sieht ihre eigenen Einträge, Admin alle. Frist 30 Tage als Vorschlag (DS-07 offen, `AUDIT_RETENTION_DAYS`).
 - Kein Posteingang (A17): Family und Help laufen weiter über den Kanal.
 
 Eigenständiger Dienst (`device_api.py`), nur Python-Standardbibliothek, getrennt vom Telefon (kein Audio, kein GPIO, kein LLM). Fällt die Schnittstelle aus, funktionieren Telefon, Erinnerungen und Help weiter.
@@ -24,7 +24,7 @@ Eigenständiger Dienst (`device_api.py`), nur Python-Standardbibliothek, getrenn
    python device_api_cli.py token
    ```
    Den Token sicher an das Portal übergeben (nur einmal angezeigt). Die ausgegebene Zeile `DEVICE_API_TOKEN_SHA256=…` in `.env` eintragen. Auf dem Gerät liegt nur der Hash.
-2. In `.env` die Tunnel-Adresse eintragen, z. B. `DEVICE_API_HOST=100.x.y.z` (Adresse der Tunnel-Schnittstelle, OA-09). `0.0.0.0` wird abgelehnt: das Gerät soll nur über den Tunnel erreichbar sein. Standard `127.0.0.1` (nur lokal, zum Testen).
+2. In `.env` die Tunnel-Adresse eintragen, z. B. `DEVICE_API_HOST=100.x.y.z` (Adresse der Tunnel-Schnittstelle, OA-09). Nur eine IP-Adresse, kein Name; `0.0.0.0`, `::` und ähnliche werden abgelehnt: das Gerät soll nur über den Tunnel erreichbar sein. Standard `127.0.0.1` (nur lokal, zum Testen).
 3. Freigaben **mit Zustimmung der Seniorin/des Seniors** eintragen (das Portal kann sich selbst keine Freigabe geben):
    ```bash
    python device_api_cli.py grant sandra.keller "Sandra Keller" angehoerige --help-visible --senior-consent
@@ -54,14 +54,14 @@ Jede Anfrage braucht `Authorization: Bearer <Gerätetoken>` (das Portal) und `X-
 | `GET /v1/status` | alle | `api`, `device_time` (UTC), `uptime_s` |
 | `GET /v1/appointments` | Angehörige, Spitex | Termine und Medikamente mit `created_by`, `own`, Erinnerungen mit Status (`geplant`, `klingelt`, `bestaetigt`, `verpasst`) |
 | `POST /v1/appointments` | Angehörige, Spitex | `{"title", "due_local", "kind": "termin"\|"medikament", "pre_minutes"}` → `201 {"id"}` |
-| `PUT /v1/appointments/<id>` | nur wer eingetragen hat | `{"title"?, "due_local"?, "pre_minutes"?}`; Erinnerungen werden neu geplant |
+| `PUT /v1/appointments/<id>` | nur wer eingetragen hat | `{"title"?, "due_local"?, "pre_minutes"?}`. Nur Text geändert: Erinnerungen behalten ihren Status. Neue Zeit: Erinnerungen werden neu geplant, die gewählte Vorerinnerung bleibt |
 | `DELETE /v1/appointments/<id>` | nur wer eingetragen hat | löscht sofort (secure_delete) |
-| `GET /v1/help` | Angehörige, Spitex mit `--help-visible` | Help-Verlauf: Zeit, Status, benachrichtigter Kontakt, quittiert von |
+| `GET /v1/help` | Angehörige, Spitex mit `--help-visible` | Help-Verlauf: Zeit, Status, zugestellt, quittiert von |
 | `GET /v1/audit` | alle | eigene Protokolleinträge; Admin: alle |
 
-Fehler: `401` falscher Token, `403` keine Freigabe oder keine Berechtigung, `404` unbekannt, `400` ungültige Eingabe.
+Fehler: `401` falscher Token, `403` keine Freigabe oder keine Berechtigung, `404` unbekannt, `400` ungültige Eingabe (auch: Zeit in der Vergangenheit, mehr als 2 Jahre voraus oder wegen Zeitumstellung nicht existent). Nach einem Fehler schliesst das Gerät die Verbindung.
 
-Wird ein Termin geändert oder gelöscht, während er gerade klingelt, hört das Klingeln innerhalb einer Sekunde auf.
+Wird die Zeit eines Termins geändert oder der Termin gelöscht, während er gerade klingelt, hört das Klingeln innerhalb einer Sekunde auf.
 
 ## Offen (für das Team)
 
