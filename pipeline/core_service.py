@@ -164,7 +164,8 @@ class Core:
 
     def __init__(self, supervisor: DialogSupervisor, ringer: Ringer,
                  help_handler: HelpHandler | None = None,
-                 announce: Callable[[str], None] | None = None):
+                 announce: Callable[[str], None] | None = None,
+                 with_reminders: bool = True):
         self.supervisor = supervisor
         self.ringer = ringer
         self.help = help_handler or HelpHandler()
@@ -174,6 +175,11 @@ class Core:
         self.tickers: list[Callable[[], None]] = [supervisor.check]
         self.running = True
         supervisor.on_restart = self._on_dialog_restart
+        self.reminders = None
+        if with_reminders:
+            from appointments import ReminderScheduler
+            self.reminders = ReminderScheduler(ringer, in_call=lambda: self.in_call)
+            self.tickers.append(self.reminders.tick)
 
     def _on_dialog_restart(self, reason: str) -> None:
         if self.in_call:
@@ -184,8 +190,17 @@ class Core:
             self.running = False
         elif event.kind == "hook_off":
             self.in_call = True
+            text = self.reminders.on_hook_off() if self.reminders else None
             self.ringer.stop()
-            self.supervisor.send("call_start")
+            if text:
+                # Reminder first (fixed text, no LLM), then normal conversation
+                def announce_then_talk():
+                    self.announce(text)
+                    if self.in_call:
+                        self.supervisor.send("call_start")
+                threading.Thread(target=announce_then_talk, daemon=True).start()
+            else:
+                self.supervisor.send("call_start")
         elif event.kind == "hook_on":
             self.in_call = False
             self.supervisor.send("call_end")

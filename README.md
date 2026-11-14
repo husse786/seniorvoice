@@ -32,6 +32,8 @@ Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 und PR 2 gilt
 
 **Start (HS26, ab PR 3):** `cd pipeline && python core_service.py` startet den Kern-Prozess (Knöpfe, Help, Zeitplan, Löschdienst, ohne LLM). Er startet den Dialog-Prozess (`dialog_service.py`: Whisper, Ollama, Piper) als Kindprozess und startet ihn neu, wenn er abstürzt, nicht mehr antwortet oder das LLM länger als 90 s hängt. Bis die Telefon-Hardware angeschlossen ist (PR 7), wird sie über die Tastatur simuliert: `a` = abheben, `h` = auflegen, `hilfe`, `heute`, `kalender`, `rat`, `familie`, `sprechen`. Der FS26-Modus `python main.py` (PIR/ENTER) bleibt vorerst erhalten.
 
+**Termine und Erinnerungen (ab PR 4):** bis das Portal da ist, per Kommandozeile: `python appointments_cli.py add "Arzttermin bei Dr. Meier" "2026-11-20 14:00" --by Spitex` bzw. `--kind medikament` für Medikamente (Text wird wörtlich vorgelesen); `python appointments_cli.py list` zeigt den Status (geplant, klingelt, bestaetigt, verpasst).
+
 Alle Einstellungen: [`.env.example`](.env.example). Tests: `pip install -r requirements-dev.txt && pytest`.
 
 ---
