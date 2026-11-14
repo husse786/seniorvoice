@@ -73,7 +73,10 @@ def test_legacy_data_removed(env, monkeypatch):
     assert conn.execute(
         "SELECT COUNT(*) FROM interactions WHERE user_text != '' OR response_text != ''"
     ).fetchone()[0] == 0
-    assert conn.execute("SELECT COUNT(*) FROM user_facts").fetchone()[0] == 0
+    # PR 2: the FS26 table is gone entirely (replaced by memory_items)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE name = 'user_facts'"
+    ).fetchone()[0] == 0
     assert conn.execute(
         "SELECT COUNT(*) FROM privacy_meta WHERE key = ?", (privacy.PURGE_MARKER,)
     ).fetchone()[0] == 1
@@ -97,7 +100,8 @@ def test_purge_on_fresh_device(env):
     privacy = env.load("privacy_migration")
     privacy.run_legacy_purge()  # no DB, no logs: must not fail
     conn = sqlite3.connect(env.db_path)
-    assert conn.execute("SELECT COUNT(*) FROM privacy_meta").fetchone()[0] == 1
+    keys = {r[0] for r in conn.execute("SELECT key FROM privacy_meta")}
+    assert privacy.PURGE_MARKER in keys
     conn.close()
 
 
