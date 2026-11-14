@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+"""Core process of the SeniorVoice telephone (decision A12).
+
+The core is always on and contains no language-model code. It
+- reads the hook switch and the buttons,
+- handles Help itself (A3, A13, A14; full Help flow in PR 6),
+- runs scheduled tasks (reminders, callback, purge; PR 4/5),
+- starts the dialog process (speech recognition, LLM, speech output) as a
+  child and supervises it: if the dialog crashes, stops answering, or the
+  LLM hangs, the core kills and restarts it.
+
+So Help and reminders keep working when the LLM hangs (condition of A12).
+"""
+
+import argparse
+import os
+import queue
+import signal
+import socket
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+from typing import Callable
+
+from logging_config import setup_logging, get_logger
+from bus import Bus, BUS_FD_ENV
+from hardware import InputEvent, KeyboardInput, Ringer, SimulatedRinger
+
+log = get_logger("core")
+
+DIALOG_SCRIPT = Path(__file__).with_name("dialog_service.py")
+
+PING_INTERVAL = float(os.getenv("CORE_PING_INTERVAL", "5"))
+# No pong for this long: dialog process is stuck (not just a slow LLM)
+HEARTBEAT_TIMEOUT = float(os.getenv("CORE_HEARTBEAT_TIMEOUT", "20"))
+# The dialog reports "thinking" while waiting for the LLM. Longer than this
+# counts as an LLM hang (LLM_TIMEOUT is 60 s by default; this is a backstop).
+LLM_HANG_TIMEOUT = float(os.getenv("CORE_LLM_HANG_TIMEOUT", "90"))
+RESTART_BACKOFF_MAX = 60.0
+
+HANG_MESSAGE = (
+    "Entschuldigung, ich habe gerade ein technisches Problem. "
+    "Bitte legen Sie kurz auf und heben Sie dann wieder ab."
+)
+
+
+class DialogSupervisor:
+    """Starts the dialog process and restarts it when it fails or hangs."""
+
+    def __init__(self, command: list[str] | None = None,
+                 on_restart: Callable[[str], None] | None = None,
+                 clock: Callable[[], float] = time.monotonic):
+        self.command = command or [sys.executable, str(DIALOG_SCRIPT)]
+        self.on_restart = on_restart or (lambda reason: None)
+        self.clock = clock
+        self.proc: subprocess.Popen | None = None
+        self.bus: Bus | None = None
+        self.state = "starting"
+        self.state_since = clock()
+        self.last_pong = clock()
+        self.last_ping = 0.0
+        self.restarts = 0
+        self._backoff = 1.0
+        self._next_start = 0.0
+        self._lock = threading.Lock()
+
+    # --- lifecycle ---
+
+    def start(self) -> None:
+        parent_sock, child_sock = socket.socketpair()
+        env = dict(os.environ, **{BUS_FD_ENV: str(child_sock.fileno())})
+        self.proc = subprocess.Popen(
+            self.command, pass_fds=[child_sock.fileno()], env=env,
+        )
+        child_sock.close()
+        self.bus = Bus(parent_sock)
+        now = self.clock()
+        with self._lock:
+            self.state = "starting"
+            self.state_since = now
+            self.last_pong = now
+        self.bus.listen(self._on_message, name="dialog-bus")
+        log.info("Dialog process started (pid %d)", self.proc.pid)
+
+    def stop(self) -> None:
+        if self.bus:
+            self.bus.close()
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait()
+
+    def _restart(self, reason: str) -> None:
+        log.warning("Restarting dialog process: %s", reason)
+        self.restarts += 1
+        if self.proc and self.proc.poll() is None:
+            self.proc.kill()
+            self.proc.wait()
+        if self.bus:
+            self.bus.close()
+        self.proc = None
+        self._next_start = self.clock() + self._backoff
+        self._backoff = min(self._backoff * 2, RESTART_BACKOFF_MAX)
+        self.on_restart(reason)
+
+    # --- messages ---
+
+    def _on_message(self, msg: dict) -> None:
+        kind = msg.get("type")
+        now = self.clock()
+        with self._lock:
+            if kind == "pong":
+                self.last_pong = now
+            elif kind == "state":
+                self.state = msg.get("state", "unknown")
+                self.state_since = now
+                self.last_pong = now
+                if self.state == "ready":
+                    self._backoff = 1.0
+
+    def send(self, msg_type: str, **fields) -> bool:
+        if self.bus is None or self.proc is None:
+            return False
+        return self.bus.send(msg_type, **fields)
+
+    # --- watchdog, called regularly by the core loop ---
+
+    def check(self) -> None:
+        now = self.clock()
+        if self.proc is None:
+            if now >= self._next_start:
+                self.start()
+            return
+        if self.proc.poll() is not None:
+            self._restart(f"exited with code {self.proc.returncode}")
+            return
+        with self._lock:
+            state, since, last_pong = self.state, self.state_since, self.last_pong
+        if state == "thinking" and now - since > LLM_HANG_TIMEOUT:
+            self._restart(f"LLM hang (thinking for {now - since:.0f}s)")
+            return
+        if now - last_pong > HEARTBEAT_TIMEOUT:
+            self._restart(f"no heartbeat for {now - last_pong:.0f}s")
+            return
+        if now - self.last_ping >= PING_INTERVAL:
+            self.last_ping = now
+            self.send("ping")
+
+
+class HelpHandler:
+    """Help button. PR 6 replaces this with the notification flow (A3, A14)."""
+
+    def trigger(self) -> None:
+        log.warning("HELP pressed (notification flow follows in PR 6)")
+
+
+class Core:
+    """State machine of the telephone. No LLM code in here."""
+
+    def __init__(self, supervisor: DialogSupervisor, ringer: Ringer,
+                 help_handler: HelpHandler | None = None,
+                 announce: Callable[[str], None] | None = None):
+        self.supervisor = supervisor
+        self.ringer = ringer
+        self.help = help_handler or HelpHandler()
+        self.announce = announce or (lambda text: None)
+        self.events: "queue.Queue[InputEvent]" = queue.Queue()
+        self.in_call = False
+        self.tickers: list[Callable[[], None]] = [supervisor.check]
+        self.running = True
+        supervisor.on_restart = self._on_dialog_restart
+
+    def _on_dialog_restart(self, reason: str) -> None:
+        if self.in_call:
+            self.announce(HANG_MESSAGE)
+
+    def handle(self, event: InputEvent) -> None:
+        if event.kind == "quit":
+            self.running = False
+        elif event.kind == "hook_off":
+            self.in_call = True
+            self.ringer.stop()
+            self.supervisor.send("call_start")
+        elif event.kind == "hook_on":
+            self.in_call = False
+            self.supervisor.send("call_end")
+        elif event.kind == "button" and event.name == "hilfe":
+            # Never through the dialog process: works even if it hangs
+            self.help.trigger()
+        elif event.kind == "button":
+            self.supervisor.send("button", name=event.name)
+
+    def tick(self) -> None:
+        for ticker in self.tickers:
+            try:
+                ticker()
+            except Exception as e:
+                log.error("Ticker %s failed: %s", getattr(ticker, "__name__", ticker), e)
+
+    def run(self, tick_interval: float = 1.0) -> None:
+        self.supervisor.start()
+        try:
+            while self.running:
+                try:
+                    event = self.events.get(timeout=tick_interval)
+                    self.handle(event)
+                except queue.Empty:
+                    pass
+                self.tick()
+        finally:
+            self.supervisor.stop()
+
+
+def _speak_or_log(text: str) -> None:
+    """Announcement from the core (no LLM). Falls back to the log."""
+    try:
+        from tts import speak
+        speak(text)
+    except Exception as e:
+        log.error("Announcement failed: %s", type(e).__name__)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="SeniorVoice core process")
+    parser.add_argument("--input", choices=["keyboard"], default="keyboard",
+                        help="input source (GPIO follows in PR 7)")
+    args = parser.parse_args()
+
+    setup_logging()
+    from privacy_migration import run_legacy_purge
+    try:
+        run_legacy_purge()
+    except Exception as e:
+        log.critical("Legacy purge failed, not starting: %s", e)
+        sys.exit(1)
+
+    from config import MEMORY_PURGE_INTERVAL
+    from memory import PurgeService
+    PurgeService(interval=MEMORY_PURGE_INTERVAL).start()
+
+    core = Core(DialogSupervisor(), SimulatedRinger(), announce=_speak_or_log)
+    if args.input == "keyboard":
+        KeyboardInput().start(core.events)
+    signal.signal(signal.SIGTERM, lambda *a: setattr(core, "running", False))
+    log.info("Core started")
+    core.run()
+    log.info("Core stopped")
+
+
+if __name__ == "__main__":
+    main()

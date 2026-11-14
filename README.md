@@ -30,6 +30,8 @@ Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 und PR 2 gilt
 - **Altdaten aus FS26** (Gesprächstexte, Fakten, Pending-Dateien, alte Logs) werden beim ersten Start einmalig gelöscht.
 - **Gedächtnis höchstens 7 Tage:** kurze Notizen (`memory_items`) mit Ablaufdatum, Löschdienst beim Start und stündlich (`secure_delete`, WAL-Checkpoint). Keine Gesundheitsangaben und keine Termine aus Gesprächen. «Vergiss das» (aktuelles Gespräch wird nicht gemerkt) und «Vergiss alles» (alle Notizen sofort gelöscht) per Sprache, ohne LLM.
 
+**Start (HS26, ab PR 3):** `cd pipeline && python core_service.py` startet den Kern-Prozess (Knöpfe, Help, Zeitplan, Löschdienst, ohne LLM). Er startet den Dialog-Prozess (`dialog_service.py`: Whisper, Ollama, Piper) als Kindprozess und startet ihn neu, wenn er abstürzt, nicht mehr antwortet oder das LLM länger als 90 s hängt. Bis die Telefon-Hardware angeschlossen ist (PR 7), wird sie über die Tastatur simuliert: `a` = abheben, `h` = auflegen, `hilfe`, `heute`, `kalender`, `rat`, `familie`, `sprechen`. Der FS26-Modus `python main.py` (PIR/ENTER) bleibt vorerst erhalten.
+
 Alle Einstellungen: [`.env.example`](.env.example). Tests: `pip install -r requirements-dev.txt && pytest`.
 
 ---

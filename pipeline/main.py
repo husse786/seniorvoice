@@ -73,10 +73,22 @@ def _reload_facts() -> tuple[list[dict], str]:
     return facts, facts_block
 
 
+def _no_state(state: str) -> None:
+    pass
+
+
 def run_pipeline(
-    use_pir: bool, history: list[dict], facts_block: str = ""
+    use_pir: bool, history: list[dict], facts_block: str = "",
+    trigger: str | None = None, on_state=_no_state,
+    still_active=lambda: True,
 ) -> tuple[list[dict], list[dict] | None]:
     """Run one full interaction cycle.
+
+    trigger: None = wait for PIR/ENTER (FS26 mode); "handset" = the caller
+    (dialog process) already knows the handset is lifted, start right away.
+    on_state(state) reports "listening", "thinking", "speaking", "idle" to
+    the core process (LLM hang detection). still_active() is checked after
+    transcription: if the senior hung up meanwhile, nothing is sent to the LLM.
 
     Returns (updated_history, pre_reset_history_or_None).
     pre_reset_history is set when a verbal reset occurred, so the caller
@@ -87,12 +99,14 @@ def run_pipeline(
     from llm_client import chat, chat_streaming
     from tts import speak
 
-    trigger_type = "pir" if use_pir else "keyboard"
+    trigger_type = trigger or ("pir" if use_pir else "keyboard")
     t_start = time.perf_counter()
     stt_ms = llm_ms = tts_ms = None
 
     # Step 1: Wait for trigger
-    if use_pir:
+    if trigger is not None:
+        pass  # handset already lifted
+    elif use_pir:
         from sensor import wait_for_motion
         wait_for_motion()
         # Small delay after motion to let the person settle
@@ -103,6 +117,7 @@ def run_pipeline(
     play_sound("listen")
 
     # Step 2: Record audio
+    on_state("listening")
     log.info("Listening...")
     wav_bytes = record_until_silence()
 
@@ -112,7 +127,12 @@ def run_pipeline(
     text = transcribe(wav_bytes)
     stt_ms = int((time.perf_counter() - t_stt) * 1000)
 
+    if not still_active():
+        on_state("idle")
+        return history, None
+
     if not text.strip():
+        on_state("idle")
         log.info("No speech detected, skipping")
         log_interaction(trigger_type=trigger_type, error="no_speech")
         return history, None
@@ -128,7 +148,9 @@ def run_pipeline(
         else:
             reply = FORGET_THIS_REPLY
         log.info("Forget command (%s)", forget)
+        on_state("speaking")
         speak(reply)
+        on_state("idle")
         # Empty history and no pre-reset snapshot: nothing is extracted
         return [], None
 
@@ -142,6 +164,7 @@ def run_pipeline(
 
     # Step 4: Get LLM response (+ Step 5 if streaming)
     play_sound("thinking")
+    on_state("thinking")
     log.info("Thinking...")
     t_llm = time.perf_counter()
 
@@ -155,6 +178,7 @@ def run_pipeline(
         llm_ms = int((time.perf_counter() - t_llm) * 1000)
 
         # Step 5: Speak the response (non-streaming)
+        on_state("speaking")
         log.info("Speaking...")
         t_tts = time.perf_counter()
         speak(response)
@@ -162,6 +186,7 @@ def run_pipeline(
 
     content_log.debug("Response: %s", response)
 
+    on_state("idle")
     total_ms = int((time.perf_counter() - t_start) * 1000)
     log.info("Interaction complete (stt=%dms, llm=%dms, tts=%dms, total=%dms)",
              stt_ms, llm_ms, tts_ms, total_ms)
