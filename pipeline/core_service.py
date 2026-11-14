@@ -156,10 +156,10 @@ class DialogSupervisor:
 
 
 class HelpHandler:
-    """Help button. PR 6 replaces this with the notification flow (A3, A14)."""
+    """Interface of the Help button handler (help_alert.HelpService)."""
 
     def trigger(self) -> None:
-        log.warning("HELP pressed (notification flow follows in PR 6)")
+        log.warning("HELP pressed (no handler configured)")
 
 
 class Core:
@@ -241,9 +241,14 @@ class Core:
             with self._call_lock:
                 self.call_delivered = False
             self.supervisor.send("call_end")
+        elif event.kind == "sim_ack" and hasattr(self.help, "simulate_ack"):
+            self.help.simulate_ack()
         elif event.kind == "button" and event.name == "hilfe":
             # Never through the dialog process: works even if it hangs
             self.help.trigger()
+        elif event.kind == "button" and event.name == "familie" and not self.in_call:
+            from family import LIFT_HANDSET
+            self._say_async(LIFT_HANDSET)
         elif event.kind == "button":
             self.supervisor.send("button", name=event.name)
 
@@ -266,6 +271,26 @@ class Core:
                 self.tick()
         finally:
             self.supervisor.stop()
+
+
+class AnnouncementQueue:
+    """Plays fixed sentences one after another on its own thread."""
+
+    def __init__(self, speak: Callable[[str], None]):
+        self._speak = speak
+        self._queue: "queue.Queue[str]" = queue.Queue()
+        threading.Thread(target=self._run, name="announce", daemon=True).start()
+
+    def say(self, text: str) -> None:
+        self._queue.put(text)
+
+    def _run(self) -> None:
+        while True:
+            text = self._queue.get()
+            try:
+                self._speak(text)
+            except Exception as e:
+                log.error("Announcement failed: %s", type(e).__name__)
 
 
 def _speak(text: str) -> None:
@@ -292,7 +317,17 @@ def main() -> None:
     from memory import PurgeService
     PurgeService(interval=MEMORY_PURGE_INTERVAL).start()
 
-    core = Core(DialogSupervisor(), SimulatedRinger(), announce=_speak)
+    from channels import channel_from_env
+    from help_alert import HelpService
+    # Help speaks through a queue: the core loop never waits for audio
+    help_voice = AnnouncementQueue(_speak)
+    help_service = HelpService(channel_from_env(), announce=help_voice.say,
+                               senior_name=os.getenv("SENIOR_NAME", ""))
+    help_service.run_worker()
+    from family import run_sender
+    run_sender(help_service.channel)
+    core = Core(DialogSupervisor(), SimulatedRinger(), help_handler=help_service,
+                announce=_speak)
     if args.input == "keyboard":
         KeyboardInput().start(core.events)
     signal.signal(signal.SIGTERM, lambda *a: setattr(core, "running", False))

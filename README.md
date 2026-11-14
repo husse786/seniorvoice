@@ -36,6 +36,8 @@ Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 und PR 2 gilt
 
 **Rückruf (ab PR 5, A7):** Verabschiedet sich der Senior («tschüss», «auf Wiederhören»), fragt das Gerät höchstens einmal pro Tag «Darf ich Sie morgen um … Uhr wieder anrufen?». Nur ein klares «Ja» zählt. Der Rückruf klingelt wie eine Erinnerung, ein zweiter Versuch nach 10 Min., dann «nicht erreicht». «Rufen Sie mich nicht an» sagt ihn ab.
 
+**Help und Familie (ab PR 6, A3, A4, A13–A15):** Kontaktpersonen in Reihenfolge eintragen (nur mit Einwilligung): `python contacts_cli.py set "Sandra|Tochter|<chat-id>" "Spitex|Spitex|<chat-id>"`. **Hilfe** benachrichtigt die erste Person (kein Notruf, das Gerät sagt «Im Notfall rufen Sie bitte 144 an»). Ohne Reaktion nach 10 Min. die nächste; reagiert niemand, sagt das Gerät «Bitte rufen Sie 144 an». **Familie**: Nachricht sprechen, Gerät liest vor, gesendet wird nur nach «Ja». Kanal: `CHANNEL=console` (Test, Standard) oder `CHANNEL=telegram` (Knopf «Ich kümmere mich»); Entscheid F4 offen. In der Tastatur-Simulation steht `ok` für «Kontaktperson quittiert».
+
 Alle Einstellungen: [`.env.example`](.env.example). Tests: `pip install -r requirements-dev.txt && pytest`.
 
 ---
