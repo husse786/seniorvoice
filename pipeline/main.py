@@ -81,6 +81,7 @@ def run_pipeline(
     use_pir: bool, history: list[dict], facts_block: str = "",
     trigger: str | None = None, on_state=_no_state,
     still_active=lambda: True,
+    intercept=None,
 ) -> tuple[list[dict], list[dict] | None]:
     """Run one full interaction cycle.
 
@@ -89,7 +90,9 @@ def run_pipeline(
     on_state(state) reports "listening", "thinking", "speaking", "idle" to
     the core process (LLM hang detection). still_active() is checked after
     transcription: if the senior hung up meanwhile, nothing is sent to the LLM,
-    and again before each spoken answer. The last transcript is kept in RAM as
+    and again before each spoken answer. intercept(text) may return a fixed
+    reply (e.g. cancel a callback); then the LLM is skipped. The last
+    transcript is kept in RAM as
     run_pipeline.last_text for the caller (never stored).
 
     Returns (updated_history, pre_reset_history_or_None).
@@ -156,6 +159,14 @@ def run_pipeline(
         on_state("idle")
         # Empty history and no pre-reset snapshot: nothing is extracted
         return [], None
+
+    # Step 3a2: commands handled by the caller without the LLM
+    reply = intercept(text) if intercept else None
+    if reply:
+        on_state("speaking")
+        speak(reply)
+        on_state("idle")
+        return history, None
 
     # Step 3b: Check for verbal conversation reset
     pre_reset_history = None

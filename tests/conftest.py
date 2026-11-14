@@ -14,7 +14,7 @@ PIPELINE_MODULES = [
     "config", "logging_config", "llm_backend", "llm_client", "memory",
     "interaction_log", "privacy_migration", "main", "tts", "sounds",
     "audio_capture", "stt", "sensor", "bus", "hardware", "core_service",
-    "dialog_service", "appointments",
+    "dialog_service", "appointments", "callback", "help_alert", "channels", "family",
 ]
 
 # Environment variables that must not leak from the developer's shell

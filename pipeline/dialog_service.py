@@ -14,6 +14,7 @@ import time
 
 from logging_config import setup_logging, get_logger
 from bus import Bus
+import callback
 
 setup_logging()
 log = get_logger("dialog")
@@ -33,6 +34,8 @@ class DialogService:
         # Each lifting of the handset is a new call. A turn of an earlier call
         # that is still transcribing or waiting for the LLM must not continue.
         self.call_id = 0
+        self.active = self.call_active.is_set   # replaced per call in run_call
+        self.pending_button: str | None = None
 
     # --- messages from the core ---
 
@@ -47,6 +50,8 @@ class DialogService:
         elif kind == "call_end":
             self.call_active.clear()
             self.call_changed.set()
+        elif kind == "button":
+            self.pending_button = msg.get("name")
         elif kind == "closed":
             # Core is gone: stop, systemd/core will start us again
             self.running = False
@@ -57,6 +62,70 @@ class DialogService:
         self.bus.send("state", state=state)
 
     # --- conversation ---
+
+    def intercept(self, text: str) -> str | None:
+        """Commands answered without the LLM."""
+        if callback.is_cancel_request(text):
+            callback.cancel_open_callbacks()
+            return callback.CANCELLED
+        return None
+
+    def offer_callback(self) -> None:
+        """A7: at most once a day, only a clear yes counts."""
+        from datetime import datetime, timezone
+        from audio_capture import record_until_silence
+        from stt import transcribe
+        from tts import speak
+
+        now = datetime.now(timezone.utc)
+        if not self.active() or not callback.may_offer(now):
+            return
+        self.state("speaking")
+        speak(callback.offer_question(now))
+        self.state("listening")
+        answer = transcribe(record_until_silence()) if self.active() else ""
+        _accepted, reply = callback.record_answer(answer, now)
+        self.state("speaking")
+        if self.active():
+            speak(reply)
+        self.state("idle")
+
+    def family_message(self) -> None:
+        """A4/M7: record, read back, send only after a clear yes."""
+        import family
+        from audio_capture import record_until_silence
+        from stt import transcribe
+        from tts import speak
+        from sounds import play_sound
+
+        contact = family.recipient()
+        self.state("speaking")
+        if contact is None:
+            speak(family.NO_RECIPIENT)
+            self.state("idle")
+            return
+        speak(family.ASK)
+        play_sound("listen")
+        self.state("listening")
+        text = transcribe(record_until_silence()).strip()
+        if not self.active():
+            self.state("idle")
+            return
+        self.state("speaking")
+        if not text:
+            speak(family.NOTHING_HEARD)
+            self.state("idle")
+            return
+        speak(family.READ_BACK.format(text=text, name=contact["name"]))
+        self.state("listening")
+        answer = transcribe(record_until_silence())
+        self.state("speaking")
+        if callback.is_clear_yes(answer) and self.active():
+            family.queue_message(text, contact)
+            speak(family.SENT.format(name=contact["name"]))
+        else:
+            speak(family.NOT_SENT)
+        self.state("idle")
 
     def run_call(self) -> None:
         """One call: turns until the handset is hung up."""
@@ -69,17 +138,23 @@ class DialogService:
 
         def active() -> bool:
             return self.running and self.call_active.is_set() and self.call_id == my_call
+        self.active = active
 
         _facts, facts_block = _reload_facts()
         history: list[dict] = []
         last_speech = time.monotonic()
         while active():
             try:
+                button, self.pending_button = self.pending_button, None
+                if button == "familie":
+                    self.family_message()
+                    continue
                 run_pipeline.last_text = ""
                 history, pre_reset = run_pipeline(
                     use_pir=False, history=history, facts_block=facts_block,
                     trigger="handset", on_state=self.state,
                     still_active=active,
+                    intercept=self.intercept,
                 )
                 if pre_reset is not None:
                     extract_facts_async(pre_reset, source=f"verbal-{int(time.time())}")
@@ -93,6 +168,8 @@ class DialogService:
                     extract_facts_async(history, source=f"timeout-{int(time.time())}")
                     history = []
                     _facts, facts_block = _reload_facts()
+                if callback.is_goodbye(run_pipeline.last_text):
+                    self.offer_callback()
             except Exception as e:
                 log.error("Turn failed: %s", type(e).__name__)
                 if active():

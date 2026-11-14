@@ -61,7 +61,7 @@ class InputSource:
 
 KEYBOARD_HELP = (
     "Befehle: a = abheben, h = auflegen, "
-    + ", ".join(BUTTONS) + " = Knopf, q = beenden"
+    + ", ".join(BUTTONS) + " = Knopf, ok = Kontaktperson quittiert Help, q = beenden"
 )
 
 
@@ -74,6 +74,8 @@ def parse_command(line: str) -> InputEvent | None:
         return InputEvent("hook_on")
     if cmd in BUTTONS:
         return InputEvent("button", cmd)
+    if cmd in ("ok", "quittieren"):
+        return InputEvent("sim_ack")   # contact presses "Ich kümmere mich"
     if cmd in ("q", "quit"):
         return InputEvent("quit")
     return None
