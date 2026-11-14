@@ -30,6 +30,8 @@ from logging_config import get_logger
 log = get_logger("privacy")
 
 PURGE_MARKER = "legacy_purge_v1"
+# v2 (PR 2): the FS26 table user_facts is replaced by memory_items
+DROP_USER_FACTS_MARKER = "drop_user_facts_v2"
 _LEGACY_OUTPUT_DIR = Path("/tmp/seniorvoice")
 _CHECKPOINT_RETRIES = 10
 
@@ -144,6 +146,29 @@ def cleanup_audio_leftovers() -> None:
             path.unlink(missing_ok=True)
 
 
+def _drop_user_facts() -> None:
+    """Remove the FS26 table user_facts (replaced by memory_items, 7 days)."""
+    conn = _connect()
+    try:
+        if conn.execute(
+            "SELECT 1 FROM privacy_meta WHERE key = ?", (DROP_USER_FACTS_MARKER,)
+        ).fetchone():
+            return
+        if _table_exists(conn, "user_facts"):
+            conn.execute("DELETE FROM user_facts")
+            conn.execute("DROP TABLE user_facts")
+            conn.commit()
+            conn.execute("VACUUM")
+        if not checkpoint_truncate(conn):
+            raise RuntimeError("Dropping user_facts incomplete (WAL checkpoint blocked)")
+        conn.execute("INSERT INTO privacy_meta (key) VALUES (?)", (DROP_USER_FACTS_MARKER,))
+        conn.commit()
+        checkpoint_truncate(conn)
+        log.info("Removed FS26 table user_facts")
+    finally:
+        conn.close()
+
+
 def run_legacy_purge() -> None:
     """Run the one-time legacy purge (if not done yet) and clean up audio."""
     cleanup_audio_leftovers()
@@ -155,6 +180,7 @@ def run_legacy_purge() -> None:
     finally:
         conn.close()
     if already_done:
+        _drop_user_facts()
         return
 
     # Any failure stops the start: the device must not run while legacy
@@ -165,3 +191,4 @@ def run_legacy_purge() -> None:
         raise RuntimeError(
             "Legacy purge incomplete (WAL checkpoint blocked); refusing to start"
         )
+    _drop_user_facts()

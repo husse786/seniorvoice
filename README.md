@@ -22,13 +22,13 @@ Team: Yanick · Christopher · Sansone · Haris
 
 ## HS26: Datenschutz-Standard (ab 14.11.2026)
 
-Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 gilt ohne jede Einstellung:
+Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 und PR 2 gilt ohne jede Einstellung:
 
 - **Sprachmodell nur lokal:** Standard ist Ollama auf dem Gerät (`http://127.0.0.1:11434/v1`, `gemma3:1b`). Adressen ausserhalb des Geräts werden abgelehnt, solange `ALLOW_CLOUD_LLM` nicht ausdrücklich gesetzt ist. Der Kimi-Rückfall aus FS26 ist kein Standard mehr.
 - **Keine Gesprächstexte in Logdateien und Datenbank:** `interactions` speichert nur Messwerte. Gesprächstext erscheint höchstens auf der Konsole, und nur mit `LOG_CONTENT=true` (Entwicklung).
 - **Antwort-Audio nur im RAM** (`/dev/shm/seniorvoice`) und nach dem Abspielen gelöscht.
 - **Altdaten aus FS26** (Gesprächstexte, Fakten, Pending-Dateien, alte Logs) werden beim ersten Start einmalig gelöscht.
-- Fakten-Gedächtnis ist bis PR 2 (7-Tage-Frist) ausgeschaltet.
+- **Gedächtnis höchstens 7 Tage:** kurze Notizen (`memory_items`) mit Ablaufdatum, Löschdienst beim Start und stündlich (`secure_delete`, WAL-Checkpoint). Keine Gesundheitsangaben und keine Termine aus Gesprächen. «Vergiss das» (aktuelles Gespräch wird nicht gemerkt) und «Vergiss alles» (alle Notizen sofort gelöscht) per Sprache, ohne LLM.
 
 Alle Einstellungen: [`.env.example`](.env.example). Tests: `pip install -r requirements-dev.txt && pytest`.
 

@@ -93,7 +93,8 @@ def test_cloud_only_with_explicit_flag(env, monkeypatch):
     assert calls == ["https://api.moonshot.ai/v1/chat/completions"]
 
 
-def test_memory_extraction_off_by_default(env, monkeypatch):
+def test_memory_extraction_can_be_switched_off(env, monkeypatch):
+    env.set(MEMORY_EXTRACTION_ENABLED="false")
     memory = env.load("memory")
     called = []
     monkeypatch.setattr(memory, "_do_extract", lambda *a, **k: called.append(1) or True)

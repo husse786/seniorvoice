@@ -44,9 +44,12 @@ PIPER_VOICE = os.getenv("PIPER_VOICE", _default_voice)
 MEMORY_MAX_TURNS = int(os.getenv("MEMORY_MAX_TURNS", "10"))  # max user+assistant pairs kept
 MEMORY_TIMEOUT = int(os.getenv("MEMORY_TIMEOUT", "300"))      # seconds of inactivity before reset
 
-# Long-term memory fact extraction. Off until retention (7 days, no health
-# data) is in place (decision A8, PR 2).
-MEMORY_EXTRACTION_ENABLED = os.getenv("MEMORY_EXTRACTION_ENABLED", "false").lower() in ("true", "1", "yes")
+# Long-term memory notes (decision A8): kept at most 7 days, no health data.
+MEMORY_EXTRACTION_ENABLED = os.getenv("MEMORY_EXTRACTION_ENABLED", "true").lower() in ("true", "1", "yes")
+# Retention in days; values above 7 are capped at 7 (A8 sets 7 days as maximum).
+MEMORY_RETENTION_DAYS = int(os.getenv("MEMORY_RETENTION_DAYS", "7"))
+# How often the purge service deletes expired notes (seconds).
+MEMORY_PURGE_INTERVAL = int(os.getenv("MEMORY_PURGE_INTERVAL", "3600"))
 
 # Long-term Memory (SQLite)
 MEMORY_DB_PATH = os.getenv("MEMORY_DB_PATH", str(Path.home() / "seniorvoice" / "seniorvoice.db"))

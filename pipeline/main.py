@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """SeniorVoice MVP Pipeline: PIR -> Record -> STT -> LLM (Ollama/Kimi) -> TTS -> Speaker."""
 
+import re
 import sys
 import time
 import argparse
 
 from logging_config import setup_logging, get_logger, get_content_logger
-from config import MEMORY_TIMEOUT, LLM_STREAM
+from config import MEMORY_TIMEOUT, LLM_STREAM, MEMORY_PURGE_INTERVAL
 from memory import (
     load_facts, format_facts_for_prompt, extract_facts_async,
-    extract_and_store_facts, retry_pending_extractions,
+    extract_and_store_facts, retry_pending_extractions, forget_all, PurgeService,
 )
 from sounds import play_sound
 from interaction_log import log_interaction
@@ -21,6 +22,32 @@ log = get_logger("pipeline")
 content_log = get_content_logger("pipeline")
 
 RESET_PHRASES = ["neue frage", "neues thema", "von vorne", "neues gespräch"]
+
+# "Vergiss das" (decision A8). Open question F3: current proposal is
+# - FORGET_THIS: the current conversation is not remembered (no notes from it)
+# - FORGET_ALL: all notes are deleted immediately
+# Answered with fixed sentences, without the LLM.
+FORGET_ALL_PHRASES = ["vergiss alles", "vergessen sie alles", "lösch alles", "löschen sie alles"]
+FORGET_THIS_PHRASES = ["vergiss das", "vergessen sie das", "lösch das", "löschen sie das"]
+FORGET_ALL_REPLY = "In Ordnung. Ich habe alles vergessen, was ich mir über Sie gemerkt habe."
+FORGET_THIS_REPLY = "In Ordnung. Ich merke mir nichts aus diesem Gespräch."
+
+
+def _has_phrase(lower: str, phrases: list[str]) -> bool:
+    """Phrase present and not negated ("Vergiss das nicht" is no command)."""
+    return any(
+        re.search(rf"\b{re.escape(p)}\b(?!\s+nicht)", lower) for p in phrases
+    )
+
+
+def _check_forget(text: str) -> str | None:
+    """Return "all", "this" or None for a spoken forget command."""
+    lower = text.lower()
+    if _has_phrase(lower, FORGET_ALL_PHRASES):
+        return "all"
+    if _has_phrase(lower, FORGET_THIS_PHRASES):
+        return "this"
+    return None
 
 
 def _check_reset(text: str) -> tuple[bool, str]:
@@ -91,6 +118,19 @@ def run_pipeline(
         return history, None
 
     content_log.debug("User said: %s", text)
+
+    # Step 3a: "Vergiss das" / "Vergiss alles" (A8): handled without the LLM
+    forget = _check_forget(text)
+    if forget is not None:
+        if forget == "all":
+            forget_all()
+            reply = FORGET_ALL_REPLY
+        else:
+            reply = FORGET_THIS_REPLY
+        log.info("Forget command (%s)", forget)
+        speak(reply)
+        # Empty history and no pre-reset snapshot: nothing is extracted
+        return [], None
 
     # Step 3b: Check for verbal conversation reset
     pre_reset_history = None
@@ -177,7 +217,9 @@ def main():
     except Exception as e:
         log.warning("LLM warmup failed (will retry on first interaction): %s", e)
 
-    # Retry any pending extractions from previous failed runs
+    # Delete expired notes now and every hour (7-day retention, A8)
+    purge_service = PurgeService(interval=MEMORY_PURGE_INTERVAL)
+    purge_service.start()
     retry_pending_extractions()
 
     # Load persistent memory
