@@ -119,3 +119,63 @@ def test_keyboard_commands(env, line, kind, name):
     hw = env.load("hardware")
     event = hw.parse_command(line)
     assert (event.kind, event.name) == (kind, name)
+
+
+class _Sup:
+    """Supervisor stand-in: the dialog is absent until ready() is called."""
+    def __init__(self):
+        self.sent, self.up = [], False
+        self.on_restart = self.on_ready = None
+
+    def send(self, kind, **kw):
+        if not self.up:
+            return False
+        self.sent.append(kind)
+        return True
+
+    def check(self):
+        pass
+
+
+def test_handset_lifted_during_restart_starts_call_when_ready(env):
+    core_mod = env.load("core_service")
+    hw = __import__("hardware")
+    sup = _Sup()
+    core = core_mod.Core(sup, hw.SimulatedRinger(), with_reminders=False)
+    core.handle(hw.InputEvent("hook_off"))  # dialog in restart backoff
+    assert sup.sent == []
+    sup.up = True
+    core._on_dialog_ready()
+    assert sup.sent == ["call_start"]
+    core._on_dialog_ready()                  # no duplicate
+    assert sup.sent == ["call_start"]
+
+
+def test_hung_up_before_ready_starts_nothing(env):
+    core_mod = env.load("core_service")
+    hw = __import__("hardware")
+    sup = _Sup()
+    core = core_mod.Core(sup, hw.SimulatedRinger(), with_reminders=False)
+    core.handle(hw.InputEvent("hook_off"))
+    core.handle(hw.InputEvent("hook_on"))
+    sup.up = True
+    core._on_dialog_ready()
+    assert sup.sent == []
+
+
+def test_hang_announcement_does_not_block_core(env):
+    core_mod = env.load("core_service")
+    hw = __import__("hardware")
+    said = []
+
+    def slow_announce(text):
+        time.sleep(1.0)
+        said.append(text)
+    core = core_mod.Core(_Sup(), hw.SimulatedRinger(), announce=slow_announce,
+                         with_reminders=False)
+    core.in_call = True
+    t = time.monotonic()
+    core._on_dialog_restart("LLM hang")
+    assert time.monotonic() - t < 0.2
+    time.sleep(1.2)
+    assert said == [core_mod.HANG_MESSAGE]

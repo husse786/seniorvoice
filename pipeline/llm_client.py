@@ -90,12 +90,18 @@ def chat(user_message: str, history: list[dict] | None = None, facts_block: str 
     return reply, history
 
 
-def chat_streaming(user_message: str, history: list[dict] | None = None, facts_block: str = "") -> tuple[str, list[dict]]:
+def chat_streaming(user_message: str, history: list[dict] | None = None, facts_block: str = "",
+                   on_state=lambda state: None, still_active=lambda: True) -> tuple[str, list[dict]]:
     """Stream tokens from LLM and speak per sentence via TTS.
 
     Returns (full_reply, updated_history). TTS playback happens inline
     as sentences complete — the user hears the first sentence while
     the LLM is still generating the rest.
+
+    on_state reports "speaking" during playback and "thinking" while waiting
+    for tokens, so the core's hang watchdog measures a stalled LLM, not the
+    length of the answer. If still_active() turns False (hung up), the
+    stream is closed and nothing more is spoken.
     """
     from tts import speak
 
@@ -107,28 +113,41 @@ def chat_streaming(user_message: str, history: list[dict] | None = None, facts_b
     buffer = ""
     full_reply = ""
 
-    for token in llm_stream(messages):
-        buffer += token
-        full_reply += token
+    def say(sentence: str) -> None:
+        on_state("speaking")
+        speak(sentence)
+        on_state("thinking")
 
-        # Flush complete sentences to TTS
-        match = _SENTENCE_END.search(buffer)
-        while match:
-            end_pos = match.end()
-            sentence = buffer[:end_pos].strip()
-            buffer = buffer[end_pos:]
+    tokens = llm_stream(messages)
+    try:
+        for token in tokens:
+            if not still_active():
+                break
+            buffer += token
+            full_reply += token
 
-            if sentence:
-                content_log.debug("Speaking sentence: %s", sentence[:80])
-                speak(sentence)
-
+            # Flush complete sentences to TTS
             match = _SENTENCE_END.search(buffer)
+            while match and still_active():
+                end_pos = match.end()
+                sentence = buffer[:end_pos].strip()
+                buffer = buffer[end_pos:]
+
+                if sentence:
+                    content_log.debug("Speaking sentence: %s", sentence[:80])
+                    say(sentence)
+
+                match = _SENTENCE_END.search(buffer)
+    finally:
+        close = getattr(tokens, "close", None)
+        if close:
+            close()
 
     # Speak any remaining text
     remainder = buffer.strip()
-    if remainder:
+    if remainder and still_active():
         content_log.debug("Speaking remainder: %s", remainder[:80])
-        speak(remainder)
+        say(remainder)
 
     log.debug("Streaming complete (%d chars total)", len(full_reply))
     history = _update_history(history, user_message, full_reply)

@@ -88,7 +88,9 @@ def run_pipeline(
     (dialog process) already knows the handset is lifted, start right away.
     on_state(state) reports "listening", "thinking", "speaking", "idle" to
     the core process (LLM hang detection). still_active() is checked after
-    transcription: if the senior hung up meanwhile, nothing is sent to the LLM.
+    transcription: if the senior hung up meanwhile, nothing is sent to the LLM,
+    and again before each spoken answer. The last transcript is kept in RAM as
+    run_pipeline.last_text for the caller (never stored).
 
     Returns (updated_history, pre_reset_history_or_None).
     pre_reset_history is set when a verbal reset occurred, so the caller
@@ -127,6 +129,7 @@ def run_pipeline(
     text = transcribe(wav_bytes)
     stt_ms = int((time.perf_counter() - t_stt) * 1000)
 
+    run_pipeline.last_text = text
     if not still_active():
         on_state("idle")
         return history, None
@@ -170,18 +173,20 @@ def run_pipeline(
 
     if LLM_STREAM:
         # Streaming: TTS happens per-sentence inside chat_streaming
-        response, history = chat_streaming(cleaned_text, history, facts_block=facts_block)
+        response, history = chat_streaming(cleaned_text, history, facts_block=facts_block,
+                                           on_state=on_state, still_active=still_active)
         llm_ms = int((time.perf_counter() - t_llm) * 1000)
         tts_ms = 0  # included in llm_ms for streaming mode
     else:
         response, history = chat(cleaned_text, history, facts_block=facts_block)
         llm_ms = int((time.perf_counter() - t_llm) * 1000)
 
-        # Step 5: Speak the response (non-streaming)
-        on_state("speaking")
-        log.info("Speaking...")
+        # Step 5: Speak the response (non-streaming), unless hung up meanwhile
         t_tts = time.perf_counter()
-        speak(response)
+        if still_active():
+            on_state("speaking")
+            log.info("Speaking...")
+            speak(response)
         tts_ms = int((time.perf_counter() - t_tts) * 1000)
 
     content_log.debug("Response: %s", response)
@@ -201,6 +206,9 @@ def run_pipeline(
     )
 
     return history, pre_reset_history
+
+
+run_pipeline.last_text = ""
 
 
 def main():

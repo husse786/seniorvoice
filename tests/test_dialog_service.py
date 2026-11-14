@@ -81,3 +81,73 @@ def test_ping_is_answered(env, monkeypatch):
     service, core_bus, _, _ = _setup(env, monkeypatch, "", lambda r, timeout=None: None)
     service.on_message({"type": "ping"})
     assert core_bus.receive() == {"type": "pong"}
+
+
+def test_new_call_during_old_turn_does_not_continue_old_one(env, monkeypatch):
+    calls = []
+
+    def llm(req, timeout=None):
+        calls.append(1)
+        raise OSError("must not be called")
+    service, core_bus, spoken, dialog = _setup(env, monkeypatch, "Hallo", llm)
+
+    def transcribe_hang_up_and_lift_again(wav):
+        service.on_message({"type": "call_end"})
+        service.on_message({"type": "call_start"})
+        return "Hallo"
+    sys.modules["stt"].transcribe = transcribe_hang_up_and_lift_again
+    service.on_message({"type": "call_start"})
+    service.run_call()                       # old call returns at once
+    assert calls == [] and spoken == []
+    assert service.call_active.is_set()      # new call is still on
+
+
+def test_facts_reloaded_after_forget_all(env, monkeypatch):
+    service, core_bus, spoken, dialog = _setup(env, monkeypatch, "Vergiss alles",
+                                               lambda r, timeout=None: None)
+    main = sys.modules["main"]
+    loads = []
+    real = main._reload_facts
+    monkeypatch.setattr(main, "_reload_facts", lambda: (loads.append(1), real())[1])
+    service.on_message({"type": "call_start"})
+    service.run_call()
+    assert len(loads) >= 2                   # once at start, once after the forget turn
+
+
+def test_silence_ends_conversation_after_timeout(env, monkeypatch):
+    import json
+    answers = iter(["Ich heisse Anna", "", ""])
+    service, core_bus, spoken, dialog = _setup(env, monkeypatch, "", None)
+    sys.modules["stt"].transcribe = lambda wav: next(answers, "")
+    sys.modules["tts"].speak = lambda text: spoken.append(text)
+
+    def llm(req, timeout=None):
+        body = json.dumps({"choices": [{"message": {"content": "Guten Tag Anna."}}]}).encode()
+        class R:
+            def read(self): return body
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        return R()
+    import llm_backend
+    patch_http(llm_backend, monkeypatch, llm)
+    import config
+    monkeypatch.setattr(config, "MEMORY_TIMEOUT", 0)
+    memory = sys.modules["memory"]
+    extracted = []
+    monkeypatch.setattr(memory, "extract_facts_async",
+                        lambda history, source="": extracted.append((len(history), source)))
+    turns = {"n": 0}
+    main = sys.modules["main"]
+    real = main.run_pipeline
+
+    def counting(*a, **kw):
+        turns["n"] += 1
+        if turns["n"] >= 3:
+            service.call_active.clear()
+        return real(*a, **kw)
+    counting.last_text = ""
+    monkeypatch.setattr(main, "run_pipeline", counting)
+    service.on_message({"type": "call_start"})
+    service.run_call()
+    assert extracted and extracted[0][1].startswith("timeout-")
+    assert not any(src.startswith("call-") for _, src in extracted)   # history was emptied

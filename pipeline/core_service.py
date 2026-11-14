@@ -54,6 +54,7 @@ class DialogSupervisor:
                  clock: Callable[[], float] = time.monotonic):
         self.command = command or [sys.executable, str(DIALOG_SCRIPT)]
         self.on_restart = on_restart or (lambda reason: None)
+        self.on_ready: Callable[[], None] = lambda: None
         self.clock = clock
         self.proc: subprocess.Popen | None = None
         self.bus: Bus | None = None
@@ -122,6 +123,8 @@ class DialogSupervisor:
                 self.last_pong = now
                 if self.state == "ready":
                     self._backoff = 1.0
+        if kind == "state" and msg.get("state") == "ready":
+            self.on_ready()
 
     def send(self, msg_type: str, **fields) -> bool:
         if self.bus is None or self.proc is None:
@@ -172,18 +175,47 @@ class Core:
         self.announce = announce or (lambda text: None)
         self.events: "queue.Queue[InputEvent]" = queue.Queue()
         self.in_call = False
+        # call_start reached the current dialog process (False after a restart)
+        self.call_delivered = False
+        self.announcing = False
+        self._call_lock = threading.Lock()
         self.tickers: list[Callable[[], None]] = [supervisor.check]
         self.running = True
         supervisor.on_restart = self._on_dialog_restart
+        supervisor.on_ready = self._on_dialog_ready
         self.reminders = None
         if with_reminders:
             from appointments import ReminderScheduler
             self.reminders = ReminderScheduler(ringer, in_call=lambda: self.in_call)
             self.tickers.append(self.reminders.tick)
 
+    def _say(self, text: str) -> bool:
+        """Play a fixed sentence (no LLM). False if it could not be played."""
+        try:
+            self.announce(text)
+            return True
+        except Exception as e:
+            log.error("Announcement failed: %s", type(e).__name__)
+            return False
+
+    def _say_async(self, text: str) -> None:
+        """Never block the core loop (Help, hook, reminders) with audio."""
+        threading.Thread(target=self._say, args=(text,), daemon=True).start()
+
     def _on_dialog_restart(self, reason: str) -> None:
+        with self._call_lock:
+            self.call_delivered = False
         if self.in_call:
-            self.announce(HANG_MESSAGE)
+            self._say_async(HANG_MESSAGE)
+
+    def _on_dialog_ready(self) -> None:
+        # Handset lifted while the dialog was (re)starting: start the call now
+        self._start_call_if_pending()
+
+    def _start_call_if_pending(self) -> None:
+        with self._call_lock:
+            if self.in_call and not self.announcing and not self.call_delivered:
+                self.call_delivered = self.supervisor.send("call_start")
 
     def handle(self, event: InputEvent) -> None:
         if event.kind == "quit":
@@ -194,15 +226,20 @@ class Core:
             self.ringer.stop()
             if text:
                 # Reminder first (fixed text, no LLM), then normal conversation
+                self.announcing = True
+
                 def announce_then_talk():
-                    self.announce(text)
-                    if self.in_call:
-                        self.supervisor.send("call_start")
+                    ok = self._say(text)
+                    self.reminders.announced(ok)
+                    self.announcing = False
+                    self._start_call_if_pending()
                 threading.Thread(target=announce_then_talk, daemon=True).start()
             else:
-                self.supervisor.send("call_start")
+                self._start_call_if_pending()
         elif event.kind == "hook_on":
             self.in_call = False
+            with self._call_lock:
+                self.call_delivered = False
             self.supervisor.send("call_end")
         elif event.kind == "button" and event.name == "hilfe":
             # Never through the dialog process: works even if it hangs
@@ -231,13 +268,10 @@ class Core:
             self.supervisor.stop()
 
 
-def _speak_or_log(text: str) -> None:
-    """Announcement from the core (no LLM). Falls back to the log."""
-    try:
-        from tts import speak
-        speak(text)
-    except Exception as e:
-        log.error("Announcement failed: %s", type(e).__name__)
+def _speak(text: str) -> None:
+    """Announcement from the core (no LLM). Raises if it cannot be played."""
+    from tts import speak
+    speak(text)
 
 
 def main() -> None:
@@ -258,7 +292,7 @@ def main() -> None:
     from memory import PurgeService
     PurgeService(interval=MEMORY_PURGE_INTERVAL).start()
 
-    core = Core(DialogSupervisor(), SimulatedRinger(), announce=_speak_or_log)
+    core = Core(DialogSupervisor(), SimulatedRinger(), announce=_speak)
     if args.input == "keyboard":
         KeyboardInput().start(core.events)
     signal.signal(signal.SIGTERM, lambda *a: setattr(core, "running", False))

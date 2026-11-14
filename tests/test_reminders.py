@@ -59,6 +59,8 @@ def test_rings_on_time_and_announces_on_pickup(setup):
     assert ringer.ringing
     text = sched.on_hook_off()
     assert text == "Guten Tag. Eine Erinnerung: Um 14:00 Uhr haben Sie Arzttermin bei Dr. Meier."
+    assert _status(appts, "pre")["status"] == "klingelt"   # not yet played
+    sched.announced(True)
     assert _status(appts, "pre")["status"] == "bestaetigt"
 
     clock.advance(minutes=30, seconds=59)   # 14:00:59: at most 1 min late
@@ -178,3 +180,75 @@ def test_core_announces_reminder_then_starts_conversation(env, monkeypatch):
         time.sleep(0.02)
     assert said and said[0].startswith("Guten Tag. Eine Erinnerung")
     assert sent == ["call_start"]
+
+
+def test_failed_announcement_is_not_heard_and_retried(setup):
+    appts, clock, ringer, sched, _ = setup
+    appts.add_appointment("Arzt", T0.replace(hour=13, minute=5), "Spitex",
+                          pre_minutes=0, now=clock.wall)
+    clock.advance(minutes=5)
+    sched.tick()
+    assert sched.on_hook_off()
+    sched.announced(False)                   # e.g. Piper failed
+    assert _status(appts)["status"] == "klingelt"
+    clock.advance(minutes=9)
+    sched.tick()
+    assert not ringer.ringing
+    clock.advance(minutes=1)
+    sched.tick()
+    assert ringer.ringing and _status(appts)["attempts"] == 2
+
+
+def test_purge_runs_during_a_long_call(env, setup):
+    appts, clock, ringer, sched, state = setup
+    appts.add_appointment("Alt GeheimAlt77", T0.replace(hour=15), "Spitex",
+                          now=clock.wall - timedelta(days=10))
+    old = appts.connect()
+    old.execute("UPDATE appointments SET delete_after = ?", (appts._iso(clock.wall),))
+    old.commit(); old.close()
+    state["in_call"] = True                  # handset off the hook
+    clock.advance(hours=1, seconds=1)        # hourly purge is due
+    sched.tick()
+    assert appts.list_reminders() == []
+    assert env.files_containing("GeheimAlt77") == []
+
+
+def test_stale_cutoff_also_for_pending_retry(setup):
+    appts, clock, ringer, sched, _ = setup
+    appts.add_appointment("Tablette", T0.replace(hour=13, minute=5), "Spitex",
+                          kind="medikament", now=clock.wall)
+    clock.advance(minutes=5)
+    sched.tick()                             # first attempt
+    clock.advance(seconds=60)
+    sched.tick()                             # no pickup, retry pending
+    clock.advance(hours=3)                   # device switched off meanwhile
+    fresh = appts.ReminderScheduler(ringer, in_call=lambda: False,
+                                    now=lambda: clock.wall, monotonic=lambda: clock.mono)
+    ringer.ringing = False
+    fresh.tick()
+    assert not ringer.ringing and _status(appts)["status"] == "verpasst"
+
+
+def test_restart_during_ringing_keeps_interval_and_limit(setup):
+    appts, clock, ringer, sched, _ = setup
+    appts.add_appointment("Podologie", T0.replace(hour=13, minute=10), "Tochter",
+                          pre_minutes=0, now=clock.wall)
+
+    def restart():                           # core process restarted while ringing
+        ringer.ringing = False
+        return appts.ReminderScheduler(ringer, in_call=lambda: False,
+                                       now=lambda: clock.wall, monotonic=lambda: clock.mono)
+    clock.advance(minutes=10)
+    sched.tick()
+    assert ringer.rings == 1
+    sched = restart()
+    clock.advance(seconds=5)
+    sched.tick()
+    assert ringer.rings == 1                 # no immediate re-ring
+    clock.advance(minutes=11)
+    sched.tick()
+    assert ringer.rings == 2
+    sched = restart()
+    clock.advance(minutes=30)
+    sched.tick()
+    assert ringer.rings == 2 and _status(appts)["status"] == "verpasst"

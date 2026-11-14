@@ -166,7 +166,12 @@ class ReminderScheduler:
     """Ticker for the core: rings, announces on pickup, marks 'verpasst'.
 
     The core calls tick() every second and on_hook_off() when the handset is
-    lifted. on_hook_off() returns the sentence to announce, or None.
+    lifted. on_hook_off() returns the sentence to announce, or None; after
+    playing it the core calls announced(ok). Only a played announcement
+    counts as "bestaetigt" (heard); a failed one stays retryable.
+
+    Retry timing is stored when an attempt starts, so a restart during
+    ringing neither rings again at once nor exceeds MAX_ATTEMPTS.
     """
 
     def __init__(self, ringer, in_call: Callable[[], bool],
@@ -177,6 +182,7 @@ class ReminderScheduler:
         self.now = now
         self.monotonic = monotonic
         self.ringing: Ringing | None = None
+        self.announcing: Ringing | None = None
         self._last_purge = 0.0
 
     def tick(self) -> None:
@@ -184,36 +190,43 @@ class ReminderScheduler:
             if self.monotonic() - self.ringing.started >= RING_SECONDS:
                 self._no_pickup()
             return
+        # Purge also during a long call (A8), but never while a row is in use
+        if self.announcing is None and self.monotonic() - self._last_purge > 3600:
+            self._last_purge = self.monotonic()
+            purge_expired(self.now())
         if self.in_call():
             return  # A5: during a call the reminder waits until hang-up
         self._start_next_due()
-        if self.monotonic() - self._last_purge > 3600:
-            self._last_purge = self.monotonic()
-            purge_expired(self.now())
 
     def _start_next_due(self) -> None:
         now = self.now()
         conn = connect()
         try:
+            # Too old (device was off) or all attempts used up (restart during
+            # ringing): close as missed instead of ringing (A6, STALE_HOURS)
             conn.execute(
                 "UPDATE reminders SET status = ?, updated_at = ? "
-                "WHERE status = ? AND due_at <= ?",
-                (VERPASST, _iso(now), GEPLANT, _iso(now - timedelta(hours=STALE_HOURS))),
+                "WHERE status IN (?, ?) AND (due_at <= ? OR (attempts >= ? AND next_attempt_at <= ?))",
+                (VERPASST, _iso(now), GEPLANT, KLINGELT,
+                 _iso(now - timedelta(hours=STALE_HOURS)), MAX_ATTEMPTS, _iso(now)),
             )
             conn.commit()
             row = conn.execute(
                 "SELECT r.id, a.kind, r.stage, a.title, a.due_at FROM reminders r "
                 "JOIN appointments a ON a.id = r.appointment_id "
-                "WHERE r.status IN ('geplant', 'klingelt') AND r.next_attempt_at <= ? "
-                "ORDER BY r.next_attempt_at LIMIT 1",
-                (_iso(now),),
+                "WHERE r.status IN ('geplant', 'klingelt') AND r.attempts < ? "
+                "AND r.next_attempt_at <= ? ORDER BY r.next_attempt_at LIMIT 1",
+                (MAX_ATTEMPTS, _iso(now)),
             ).fetchone()
             if row is None:
                 return
             rid, kind, stage, title, appt_due = row
+            # Next attempt (if any) is fixed now, not when ringing ends
+            next_at = now + timedelta(seconds=RING_SECONDS, minutes=RETRY_MINUTES)
             conn.execute(
-                "UPDATE reminders SET status = ?, attempts = attempts + 1, updated_at = ? WHERE id = ?",
-                (KLINGELT, _iso(now), rid),
+                "UPDATE reminders SET status = ?, attempts = attempts + 1, next_attempt_at = ?, "
+                "updated_at = ? WHERE id = ?",
+                (KLINGELT, _iso(next_at), _iso(now), rid),
             )
             conn.commit()
         finally:
@@ -225,33 +238,53 @@ class ReminderScheduler:
     def _no_pickup(self) -> None:
         ringing, self.ringing = self.ringing, None
         self.ringer.stop()
+        self._attempt_failed(ringing.reminder_id, retry_at=None)
+
+    def _attempt_failed(self, reminder_id: int, retry_at: datetime | None) -> None:
+        """Missed after MAX_ATTEMPTS; otherwise the stored retry stays (or retry_at)."""
         now = self.now()
         conn = connect()
         try:
             attempts = conn.execute(
-                "SELECT attempts FROM reminders WHERE id = ?", (ringing.reminder_id,)
+                "SELECT attempts FROM reminders WHERE id = ?", (reminder_id,)
             ).fetchone()[0]
             if attempts >= MAX_ATTEMPTS:
                 conn.execute(
                     "UPDATE reminders SET status = ?, updated_at = ? WHERE id = ?",
-                    (VERPASST, _iso(now), ringing.reminder_id),
+                    (VERPASST, _iso(now), reminder_id),
                 )
-                log.info("Reminder %d missed after %d attempts", ringing.reminder_id, attempts)
-            else:
+                log.info("Reminder %d missed after %d attempts", reminder_id, attempts)
+            elif retry_at is not None:
                 conn.execute(
                     "UPDATE reminders SET next_attempt_at = ?, updated_at = ? WHERE id = ?",
-                    (_iso(now + timedelta(minutes=RETRY_MINUTES)), _iso(now), ringing.reminder_id),
+                    (_iso(retry_at), _iso(now), reminder_id),
                 )
             conn.commit()
         finally:
             conn.close()
 
     def on_hook_off(self) -> str | None:
-        """Handset lifted. If ringing: mark heard, return the sentence to say."""
+        """Handset lifted. If ringing: return the sentence to say.
+
+        The reminder counts as heard only when the core reports announced(True).
+        """
         if self.ringing is None:
             return None
         ringing, self.ringing = self.ringing, None
         self.ringer.stop()
+        self.announcing = ringing
+        return ringing.text
+
+    def announced(self, ok: bool) -> None:
+        """Called by the core after playing the sentence from on_hook_off()."""
+        ringing, self.announcing = self.announcing, None
+        if ringing is None:
+            return
+        if not ok:
+            log.warning("Reminder %d not announced, will retry", ringing.reminder_id)
+            self._attempt_failed(ringing.reminder_id,
+                                 retry_at=self.now() + timedelta(minutes=RETRY_MINUTES))
+            return
         conn = connect()
         try:
             conn.execute(
@@ -262,7 +295,6 @@ class ReminderScheduler:
         finally:
             conn.close()
         log.info("Reminder %d heard", ringing.reminder_id)
-        return ringing.text
 
 
 def purge_expired(now: datetime | None = None) -> int:
