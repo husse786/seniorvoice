@@ -2,6 +2,9 @@
 """Benchmark LLM models for SeniorVoice — measures tok/s, TTFT, and German quality.
 
 Works with both local Ollama and cloud APIs (Kimi, OpenAI-compatible).
+WARNING (HS26): the cloud mode sends the benchmark prompts to an external
+provider. Use only fixed test prompts, never real conversations, and never on a
+device used by seniors (decision A1, 14.11.2026).
 Models are tested one-by-one with explicit unloading between tests to avoid
 memory pressure on the Pi.
 

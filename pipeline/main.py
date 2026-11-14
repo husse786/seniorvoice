@@ -5,7 +5,7 @@ import sys
 import time
 import argparse
 
-from logging_config import setup_logging, get_logger
+from logging_config import setup_logging, get_logger, get_content_logger
 from config import MEMORY_TIMEOUT, LLM_STREAM
 from memory import (
     load_facts, format_facts_for_prompt, extract_facts_async,
@@ -13,9 +13,12 @@ from memory import (
 )
 from sounds import play_sound
 from interaction_log import log_interaction
+from privacy_migration import run_legacy_purge
 
 setup_logging()
 log = get_logger("pipeline")
+# Conversation content: console only, off by default, never in log files (A8)
+content_log = get_content_logger("pipeline")
 
 RESET_PHRASES = ["neue frage", "neues thema", "von vorne", "neues gespräch"]
 
@@ -60,8 +63,6 @@ def run_pipeline(
     trigger_type = "pir" if use_pir else "keyboard"
     t_start = time.perf_counter()
     stt_ms = llm_ms = tts_ms = None
-    user_text = ""
-    response_text = ""
 
     # Step 1: Wait for trigger
     if use_pir:
@@ -89,8 +90,7 @@ def run_pipeline(
         log_interaction(trigger_type=trigger_type, error="no_speech")
         return history, None
 
-    user_text = text
-    log.info("User said: %s", text)
+    content_log.debug("User said: %s", text)
 
     # Step 3b: Check for verbal conversation reset
     pre_reset_history = None
@@ -120,18 +120,15 @@ def run_pipeline(
         speak(response)
         tts_ms = int((time.perf_counter() - t_tts) * 1000)
 
-    response_text = response
-    log.info("Response: %s", response)
+    content_log.debug("Response: %s", response)
 
     total_ms = int((time.perf_counter() - t_start) * 1000)
     log.info("Interaction complete (stt=%dms, llm=%dms, tts=%dms, total=%dms)",
              stt_ms, llm_ms, tts_ms, total_ms)
 
-    # Log interaction to SQLite
+    # Log interaction metrics to SQLite (no conversation text, decision A8)
     log_interaction(
         trigger_type=trigger_type,
-        user_text=user_text,
-        response_text=response_text,
         stt_duration_ms=stt_ms,
         llm_duration_ms=llm_ms,
         tts_duration_ms=tts_ms,
@@ -158,6 +155,14 @@ def main():
     use_pir = not args.no_pir
     mode = "PIR sensor" if use_pir else "keyboard (ENTER)"
     log.info("SeniorVoice starting (trigger: %s)", mode)
+
+    # One-time removal of conversation data stored by the FS26 version
+    # (decision F2, 14.11.2026). Idempotent; does nothing after the first run.
+    try:
+        run_legacy_purge()
+    except Exception as e:
+        log.critical("Legacy purge failed, not starting: %s", e)
+        sys.exit(1)
 
     # Pre-load the STT model on startup
     from stt import get_model

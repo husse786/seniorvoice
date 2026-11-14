@@ -1,4 +1,8 @@
 """
+WARNING (HS26): this developer script sends a test prompt to the Moonshot
+cloud (servers in Singapore). Never run it with real conversation data and
+never on a device used by seniors (decision A1, 14.11.2026).
+
 Kimi API diagnostic script — run on the Pi to verify that LLM calls actually
 reach the Moonshot Cloud and to measure realistic cloud latency.
 

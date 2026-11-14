@@ -5,9 +5,10 @@ import wave
 import numpy as np
 from faster_whisper import WhisperModel
 from config import WHISPER_MODEL, WHISPER_DEVICE, WHISPER_LANGUAGE
-from logging_config import get_logger
+from logging_config import get_logger, get_content_logger
 
 log = get_logger("stt")
+content_log = get_content_logger("stt")
 
 _model = None
 
@@ -34,5 +35,7 @@ def transcribe(wav_bytes: bytes) -> str:
     segments, info = model.transcribe(audio, language=WHISPER_LANGUAGE, beam_size=5)
 
     text = " ".join(seg.text.strip() for seg in segments)
-    log.info("Transcribed (%s, %.0f%%): %s", info.language, info.language_probability * 100, text)
+    log.info("Transcribed (%s, %.0f%%, %d chars)", info.language,
+             info.language_probability * 100, len(text))
+    content_log.debug("Transcript: %s", text)
     return text
