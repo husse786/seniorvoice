@@ -75,6 +75,13 @@ GPIO_DEBOUNCE_MS = int(os.getenv("GPIO_DEBOUNCE_MS", "30"))
 HANDSET_ALSA_DEVICE = os.getenv("HANDSET_ALSA_DEVICE", "")
 SPEAKER_ALSA_DEVICE = os.getenv("SPEAKER_ALSA_DEVICE", "")
 
+# Device API for the portal (PR 10, B4). Listens only on the tunnel address;
+# without a token hash it does not start. AUDIT_RETENTION_DAYS: proposal (DS-07 open).
+DEVICE_API_HOST = os.getenv("DEVICE_API_HOST", "127.0.0.1")
+DEVICE_API_PORT = int(os.getenv("DEVICE_API_PORT", "8770"))
+DEVICE_API_TOKEN_SHA256 = os.getenv("DEVICE_API_TOKEN_SHA256", "").strip().lower()
+AUDIT_RETENTION_DAYS = int(os.getenv("AUDIT_RETENTION_DAYS", "30"))
+
 # Audio Feedback
 SOUND_ENABLED = os.getenv("SOUND_ENABLED", "true").lower() in ("true", "1", "yes")
 

@@ -15,6 +15,7 @@ PIPELINE_MODULES = [
     "interaction_log", "privacy_migration", "main", "tts", "sounds",
     "audio_capture", "stt", "sensor", "bus", "hardware", "core_service",
     "dialog_service", "appointments", "callback", "help_alert", "channels", "family",
+    "device_api",
 ]
 
 # Environment variables that must not leak from the developer's shell
@@ -23,7 +24,8 @@ _ENV_TO_CLEAR = [
     "LLM_STREAM", "ALLOW_CLOUD_LLM", "LOG_CONTENT", "LOG_LEVEL",
     "MEMORY_EXTRACTION_ENABLED", "OUTPUT_DIR", "MEMORY_DB_PATH", "LOG_DIR", "DB_PATH",
     "LLM_OLLAMA_API_BASE", "LLM_OLLAMA_MODEL", "LLM_KIMI_API_BASE", "LLM_KIMI_MODEL",
-    "LLM_KIMI_API_KEY",
+    "LLM_KIMI_API_KEY", "DEVICE_API_HOST", "DEVICE_API_PORT", "DEVICE_API_TOKEN_SHA256",
+    "AUDIT_RETENTION_DAYS",
 ]
 
 

@@ -81,55 +81,183 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# PR 10: created_by_id = portal account that entered it (NULL = senior or
+# device setup); only this account may change or delete it (B5).
+# pre_minutes = chosen pre-reminder, kept when the time is changed.
+_ADDED_COLUMNS = (("created_by_id", "TEXT"), ("pre_minutes", "INTEGER"))
+_schema_ready: set[str] = set()
+
+
 def connect() -> sqlite3.Connection:
     path = Path(MEMORY_DB_PATH)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path), timeout=5.0)
-    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA secure_delete=ON")
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(_SCHEMA)
+    if str(path) not in _schema_ready:       # once per process and database
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.executescript(_SCHEMA)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(appointments)")}
+        for name, sql_type in _ADDED_COLUMNS:
+            if name in columns:
+                continue
+            try:
+                conn.execute(f"ALTER TABLE appointments ADD COLUMN {name} {sql_type}")
+                conn.commit()
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e):   # other process was faster
+                    raise
+        _schema_ready.add(str(path))
     return conn
+
+
+def _to_utc(due_local: datetime) -> datetime:
+    if due_local.tzinfo is None:
+        due_local = due_local.replace(tzinfo=LOCAL_TZ)
+    return due_local.astimezone(timezone.utc)
+
+
+def _pre_minutes(kind: str, pre_minutes: int | None) -> int:
+    if kind == "rueckruf":
+        return 0
+    if pre_minutes is None:
+        # Proposal: medication reminders ring at the time itself only
+        return PRE_REMINDER_MINUTES if kind == "termin" else 0
+    return pre_minutes
+
+
+def _insert_reminders(conn: sqlite3.Connection, appt_id: int, due: datetime,
+                      pre_minutes: int, now: datetime) -> None:
+    stages = [("main", due)]
+    if pre_minutes > 0 and due - timedelta(minutes=pre_minutes) > now:
+        stages.insert(0, ("pre", due - timedelta(minutes=pre_minutes)))
+    for stage, at in stages:
+        conn.execute(
+            "INSERT INTO reminders (appointment_id, stage, due_at, next_attempt_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (appt_id, stage, _iso(at), _iso(at), _iso(now)),
+        )
 
 
 def add_appointment(title: str, due_local: datetime, created_by: str,
                     kind: str = "termin", pre_minutes: int | None = None,
-                    now: datetime | None = None) -> int:
+                    now: datetime | None = None, created_by_id: str | None = None) -> int:
     """Store an appointment and its reminders. due_local: Swiss local time."""
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {KINDS}")
     if not title.strip() or not created_by.strip():
         raise ValueError("title and created_by are required")
     now = now or _now_utc()
-    if due_local.tzinfo is None:
-        due_local = due_local.replace(tzinfo=LOCAL_TZ)
-    due = due_local.astimezone(timezone.utc)
-    if pre_minutes is None:
-        # Proposal: medication reminders ring at the time itself only
-        pre_minutes = PRE_REMINDER_MINUTES if kind == "termin" else 0
-    if kind == "rueckruf":
-        pre_minutes = 0
+    due = _to_utc(due_local)
+    pre_minutes = _pre_minutes(kind, pre_minutes)
 
     conn = connect()
     try:
         cur = conn.execute(
-            "INSERT INTO appointments (kind, title, due_at, created_by, created_at, delete_after) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (kind, title.strip(), _iso(due), created_by.strip(), _iso(now),
-             _iso(due + timedelta(days=RETENTION_DAYS))),
+            "INSERT INTO appointments (kind, title, due_at, created_by, created_by_id, "
+            "pre_minutes, created_at, delete_after) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (kind, title.strip(), _iso(due), created_by.strip(), created_by_id, pre_minutes,
+             _iso(now), _iso(due + timedelta(days=RETENTION_DAYS))),
         )
         appt_id = cur.lastrowid
-        stages = [("main", due)]
-        if pre_minutes > 0 and due - timedelta(minutes=pre_minutes) > now:
-            stages.insert(0, ("pre", due - timedelta(minutes=pre_minutes)))
-        for stage, at in stages:
-            conn.execute(
-                "INSERT INTO reminders (appointment_id, stage, due_at, next_attempt_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (appt_id, stage, _iso(at), _iso(at), _iso(now)),
-            )
+        _insert_reminders(conn, appt_id, due, pre_minutes, now)
         conn.commit()
         return appt_id
+    finally:
+        conn.close()
+
+
+def get_appointment(appt_id: int) -> dict | None:
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT id, kind, title, due_at, created_by, created_by_id FROM appointments WHERE id = ?",
+            (appt_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    return dict(zip(("id", "kind", "title", "due_at", "created_by", "created_by_id"), row))
+
+
+def update_appointment(appt_id: int, title: str | None = None,
+                       due_local: datetime | None = None, pre_minutes: int | None = None,
+                       now: datetime | None = None) -> bool:
+    """Change text and/or time. False if the appointment does not exist.
+
+    Only the text: reminders keep their status (nothing rings again).
+    New time or pre-reminder: reminders are planned anew; one that is
+    ringing right now stops on the next scheduler tick (its row is replaced).
+    """
+    now = now or _now_utc()
+    if title is not None and not title.strip():
+        raise ValueError("title is required")
+    conn = connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT kind, due_at, pre_minutes FROM appointments WHERE id = ?",
+                           (appt_id,)).fetchone()
+        if row is None:
+            conn.rollback()
+            return False
+        kind, old_due, old_pre = row
+        if title is not None:
+            conn.execute("UPDATE appointments SET title = ? WHERE id = ?", (title.strip(), appt_id))
+        if due_local is not None or pre_minutes is not None:
+            due = _parse(old_due) if due_local is None else _to_utc(due_local)
+            pre = _pre_minutes(kind, pre_minutes if pre_minutes is not None else old_pre)
+            conn.execute(
+                "UPDATE appointments SET due_at = ?, pre_minutes = ?, delete_after = ? WHERE id = ?",
+                (_iso(due), pre, _iso(due + timedelta(days=RETENTION_DAYS)), appt_id),
+            )
+            conn.execute("DELETE FROM reminders WHERE appointment_id = ?", (appt_id,))
+            _insert_reminders(conn, appt_id, due, pre, now)
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def delete_appointment(appt_id: int) -> bool:
+    """Delete an appointment and its reminders for real (secure_delete, WAL truncated)."""
+    conn = connect()
+    try:
+        deleted = conn.execute("DELETE FROM appointments WHERE id = ?", (appt_id,)).rowcount
+        conn.commit()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    finally:
+        conn.close()
+    return deleted > 0
+
+
+def list_appointments() -> list[dict]:
+    """All stored appointments with their reminder status (portal view, PR 10)."""
+    conn = connect()
+    try:
+        appts = conn.execute(
+            "SELECT id, kind, title, due_at, created_by, created_by_id FROM appointments "
+            "ORDER BY due_at"
+        ).fetchall()
+        reminders = conn.execute(
+            "SELECT appointment_id, stage, due_at, status, attempts FROM reminders ORDER BY due_at"
+        ).fetchall()
+    finally:
+        conn.close()
+    by_appt: dict[int, list[dict]] = {}
+    for appt_id, stage, due_at, status, attempts in reminders:
+        by_appt.setdefault(appt_id, []).append(
+            {"stage": stage, "due_at": due_at, "status": status, "attempts": attempts})
+    keys = ("id", "kind", "title", "due_at", "created_by", "created_by_id")
+    return [dict(zip(keys, row), reminders=by_appt.get(row[0], [])) for row in appts]
+
+
+def _reminder_exists(reminder_id: int) -> bool:
+    # Called every second while ringing: plain connection, no schema work
+    conn = sqlite3.connect(str(Path(MEMORY_DB_PATH)), timeout=5.0)
+    try:
+        return conn.execute("SELECT 1 FROM reminders WHERE id = ?",
+                            (reminder_id,)).fetchone() is not None
     finally:
         conn.close()
 
@@ -193,7 +321,12 @@ class ReminderScheduler:
 
     def tick(self) -> None:
         if self.ringing is not None:
-            if self.monotonic() - self.ringing.started >= RING_SECONDS:
+            if not _reminder_exists(self.ringing.reminder_id):
+                # Changed or deleted in the portal while ringing (PR 10)
+                log.info("Reminder %d removed while ringing", self.ringing.reminder_id)
+                self.ringing = None
+                self.ringer.stop()
+            elif self.monotonic() - self.ringing.started >= RING_SECONDS:
                 self._no_pickup()
             return
         # Purge also during a long call (A8), but never while a row is in use
@@ -253,9 +386,12 @@ class ReminderScheduler:
         now = self.now()
         conn = connect()
         try:
-            attempts = conn.execute(
+            row = conn.execute(
                 "SELECT attempts FROM reminders WHERE id = ?", (reminder_id,)
-            ).fetchone()[0]
+            ).fetchone()
+            if row is None:
+                return                      # removed in the portal meanwhile
+            attempts = row[0]
             if attempts >= MAX_ATTEMPTS:
                 kind = conn.execute(
                     "SELECT a.kind FROM reminders r JOIN appointments a ON a.id = r.appointment_id "

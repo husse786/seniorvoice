@@ -40,6 +40,8 @@ Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 und PR 2 gilt
 
 **Telefon-Hardware und Autostart (ab PR 7, A9, A12, B3):** `set -a; . ../.env; set +a; python core_service.py --input gpio` (lädt `.env` bei manuellem Start; der systemd-Dienst lädt sie selbst) liest Gabel und die sechs Knöpfe über GPIO (Pins in `.env`, siehe `.env.example`; Gabel wie in `docs/how-to_analog-telephone.md`). Gespräch und Erinnerung nach dem Abheben über den Hörer (`HANDSET_ALSA_DEVICE`, Mikrofon `AUDIO_DEVICE_NAME`), Klingeln, Help-Bestätigung und «Bitte Hörer abheben» über den Raumlautsprecher (`SPEAKER_ALSA_DEVICE`). **Heute** liest Datum, heutige Termine und Medikamente vor, **Kalender** die Termine der nächsten 7 Tage (feste Sätze, kein LLM); ohne abgehobenen Hörer bittet das Gerät, zuerst abzuheben. Autostart: `sudo cp deploy/seniorvoice.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now seniorvoice` (Benutzer und Pfade in der Datei ggf. anpassen); Logs mit `journalctl -u seniorvoice -f`. Verkabelung, Prüfbefehle und Fehlerbehebung: [docs/inbetriebnahme-telefon.md](docs/inbetriebnahme-telefon.md).
 
+**Geräte-Schnittstelle für das Portal (ab PR 10, B4, B5, A16–A18):** eigener Dienst `device_api.py` (nur Standardbibliothek, hört nur auf der Tunnel-Adresse, startet nicht ohne Gerätetoken). Liefert dem Portal live Termine, Erinnerungsstatus und Help-Verlauf; nie Gesprächsinhalte. Freigaben und Zugriffsprotokoll liegen auf dem Gerät (`device_api_cli.py`). Einrichtung und Anfragen: [docs/geraete-api.md](docs/geraete-api.md).
+
 Alle Einstellungen: [`.env.example`](.env.example). Tests: `pip install -r requirements-dev.txt && pytest`.
 
 ---
