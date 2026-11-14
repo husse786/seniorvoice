@@ -146,16 +146,21 @@ Im letzten Befehl muss der Hörer-Eingang einen Namen haben, den **kein anderes 
 ```bash
 cp .env.example .env   # falls noch nicht vorhanden
 ```
+Kommentare nur auf eigenen Zeilen: systemd liest `# …` hinter einem Wert als Teil des Werts, und der Dienst startet dann nicht. Werte mit Leerzeichen in Anführungszeichen setzen.
 ```
-GPIO_CHIP=0                     # aus 4.1
+# aus 4.1
+GPIO_CHIP=0
 HOOK_GPIO_PIN=17
-HOOK_OFFHOOK_LEVEL=1            # aus 4.2
+# aus 4.2
+HOOK_OFFHOOK_LEVEL=1
 BUTTON_PINS=sprechen:5,heute:6,kalender:13,rat:19,familie:26,hilfe:21
-AUDIO_DEVICE_NAME=...           # aus 4.4
+# aus 4.4, z. B. "USB Audio"
+AUDIO_DEVICE_NAME="..."
 HANDSET_ALSA_DEVICE=plughw:CARD=handset,DEV=0
 SPEAKER_ALSA_DEVICE=plughw:CARD=speaker,DEV=0
 CHANNEL=console
-ALLOW_CLOUD_LLM=false           # nie ändern auf einem Seniorengerät
+# nie ändern auf einem Seniorengerät
+ALLOW_CLOUD_LLM=false
 ```
 
 ### 4.6 Funktionstest im Vordergrund
@@ -200,6 +205,7 @@ sudo reboot     # danach Test 1 und 7 wiederholen
 | `aplay: … Device or resource busy` | PulseAudio/PipeWire hält die Karte (Desktop-Image). Lite-Image verwenden oder für den Benutzer abschalten: `systemctl --user mask pulseaudio.socket pulseaudio.service` bzw. `pipewire.socket pipewire-pulse.socket wireplumber.service`. |
 | `aplay: … No such card` | udev-Regel greift nicht (Adapter an anderem Port) → 4.3 wiederholen. |
 | Kein Ton, kein Fehler | `HANDSET_ALSA_DEVICE` leer → Standard-Ausgang. Pegel in `alsamixer -c handset` (Mute = `MM`, mit `m` lösen). |
+| Dienst startet alle 5 s neu, Log «ValueError» | Kommentar hinter einem Wert in `.env` (siehe 4.5). |
 | «No input device matching …» | `AUDIO_DEVICE_NAME` passt nicht; Liste steht in der Fehlermeldung. |
 | Beide Adapter heissen gleich, Mikrofon falsch gewählt | Zweiten Adapter eines anderen Modells nehmen. Code-Erweiterung, die das Mikrofon über die udev-Kartennamen wählt, ist vorgeschlagen, aber noch nicht gebaut. |
 | `piper: not found` im Dienst | `PATH` in der Service-Datei zeigt nicht auf `.venv/bin` (Benutzer/Pfad angepasst?). |

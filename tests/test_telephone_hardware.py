@@ -174,7 +174,7 @@ def test_announcement_pauses_ringing(env):
     time.sleep(0.3)
     seen = []
 
-    def speak(text):
+    def speak(text, output="speaker"):
         proc = ringer._proc
         seen.append(proc is None or proc.poll() is not None)   # ring player has ended
     q = core_mod.AnnouncementQueue(speak, ringer=ringer)
@@ -368,3 +368,77 @@ def test_announcement_queue_routes_output_and_pauses_ring_only_for_speaker(env):
     assert q.say_and_wait("Hilfe") is True
     assert played == [("Erinnerung", "handset"), ("Hilfe", "speaker")]
     assert events == ["pause", "resume"]
+
+
+def test_restart_notice_finishes_before_the_call_restarts(env):
+    """The handset is busy with the restart notice; call_start comes after it."""
+    import threading
+    core_mod = env.load("core_service")
+    hw = __import__("hardware")
+    sent, gate, heard = [], threading.Event(), []
+
+    class Sup:
+        on_restart = None
+
+        def send(self, kind, **kw):
+            sent.append(kind)
+            return True
+
+        def check(self):
+            pass
+
+    def handset(text):
+        gate.wait(2)
+        heard.append(text)
+    core = core_mod.Core(Sup(), hw.SimulatedRinger(), announce=lambda t: None,
+                         announce_handset=handset, with_reminders=False)
+    core.handle(hw.InputEvent("hook_off"))
+    assert sent == ["call_start"]
+    core._on_dialog_restart("crash")
+    core._on_dialog_ready()                       # new dialog is ready at once
+    time.sleep(0.1)
+    assert sent == ["call_start"]                 # still waiting for the notice
+    gate.set()
+    for _ in range(100):
+        if len(sent) == 2:
+            break
+        time.sleep(0.01)
+    assert heard == [core_mod.HANG_MESSAGE] and sent == ["call_start", "call_start"]
+
+
+def test_handset_sentence_does_not_delay_help_on_the_speaker(env):
+    import threading
+    core_mod = env.load("core_service")
+    gate, played = threading.Event(), []
+
+    def speak(text, output="speaker"):
+        if output == "handset":
+            gate.wait(2)
+        played.append((text, output))
+    q = core_mod.AnnouncementQueue(speak)
+    q.say("Erinnerung", output="handset")         # long reminder in the handset
+    time.sleep(0.05)
+    assert q.say_and_wait("Hilfe") is True        # not blocked by it
+    assert played == [("Hilfe", "speaker")]
+    gate.set()
+
+
+def test_ring_after_stop_waits_for_a_running_announcement(env):
+    hw = env.load("hardware")
+    started = []
+
+    def command():
+        started.append(1)
+        return [sys.executable, "-c", "import time; time.sleep(30)"]
+    ringer = hw.AudioRinger(command=command)
+    ringer.ring()
+    time.sleep(0.2)
+    ringer.pause()                                # Help is speaking
+    ringer.stop()                                 # ring time over
+    ringer.ring()                                 # next reminder is due
+    time.sleep(0.3)
+    assert len(started) == 1                      # speaker stays free
+    ringer.resume()
+    time.sleep(0.3)
+    assert len(started) == 2
+    ringer.stop()

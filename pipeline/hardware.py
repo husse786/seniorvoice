@@ -42,6 +42,12 @@ class Ringer:
     def stop(self) -> None:
         raise NotImplementedError
 
+    def pause(self) -> None:
+        """Free the speaker for an announcement; no-op without a real device."""
+
+    def resume(self) -> None:
+        pass
+
 
 class SimulatedRinger(Ringer):
     def __init__(self):
@@ -244,6 +250,8 @@ class AudioRinger(Ringer):
         return self._thread is not None and self._thread.is_alive()
 
     def ring(self) -> None:
+        if self.ringing and self._stop.is_set():
+            self._thread.join(timeout=3)      # previous ring is still ending
         if self.ringing:
             return
         self._stop.clear()
@@ -251,6 +259,7 @@ class AudioRinger(Ringer):
         self._thread.start()
 
     def _loop(self) -> None:
+        reported = False                       # one error log per ring, not per second
         while not self._stop.is_set():
             if self._paused.is_set():
                 self._stop.wait(0.05)          # an announcement uses the speaker
@@ -267,10 +276,14 @@ class AudioRinger(Ringer):
                                                   stderr=subprocess.DEVNULL)
                 code = self._proc.wait()
                 if code != 0 and not (self._stop.is_set() or self._paused.is_set()):
-                    log.error("Ring tone player exited with %d", code)
+                    if not reported:
+                        log.error("Ring tone player exited with %d", code)
+                        reported = True
                     self._stop.wait(1.0)
             except Exception as e:
-                log.error("Ring tone failed: %s", type(e).__name__)
+                if not reported:
+                    log.error("Ring tone failed: %s", type(e).__name__)
+                    reported = True
                 self._stop.wait(1.0)
 
     def _kill_player(self) -> None:
@@ -283,6 +296,10 @@ class AudioRinger(Ringer):
                 proc.wait(timeout=2)
             except Exception:
                 proc.kill()
+                try:
+                    proc.wait(timeout=1)       # device is free only once it has exited
+                except Exception:
+                    log.error("Ring tone player did not exit")
 
     def pause(self) -> None:
         """Free the speaker for an announcement (Help goes first, A13)."""
@@ -295,5 +312,6 @@ class AudioRinger(Ringer):
     def stop(self) -> None:
         """Stops at once, also in the middle of a ring (handset lifted)."""
         self._stop.set()
-        self._paused.clear()
+        # _paused belongs to the announcement that is speaking: a new ring()
+        # must not take the speaker away from it
         self._kill_player()

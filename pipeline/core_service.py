@@ -217,7 +217,15 @@ class Core:
         with self._call_lock:
             self.call_delivered = False
         if self.in_call:
-            self._say_async(HANG_MESSAGE, output="handset")
+            # Handset is busy with the notice: the restarted dialog starts the
+            # call only after it (like the reminder after pickup)
+            self.announcing = True
+
+            def notice():
+                self._say(HANG_MESSAGE, output="handset")
+                self.announcing = False
+                self._start_call_if_pending()
+            threading.Thread(target=notice, daemon=True).start()
 
     def _on_dialog_ready(self) -> None:
         # Handset lifted while the dialog was (re)starting: start the call now
@@ -290,21 +298,26 @@ class Core:
 class AnnouncementQueue:
     """All fixed sentences of the core, one after another on one thread.
 
-    Help sentences (urgent) go before waiting reminder or restart sentences,
-    so they never overlap other core speech. Help and "please lift the
-    handset" use the room speaker (A13); sentences for the person on the
-    phone (reminder after pickup, restart notice) use the handset (A9).
+    One queue and thread per output device: Help and "please lift the
+    handset" use the room speaker (A13), sentences for the person on the phone
+    (reminder after pickup, restart notice) the handset (A9). A handset
+    sentence never delays Help. On the speaker, Help (urgent) goes first.
     """
+
+    OUTPUTS = ("speaker", "handset")
 
     def __init__(self, speak: Callable[..., None], ringer=None):
         self._speak = speak
-        self._ringer = ringer          # paused while speaking: same speaker device
-        self._queue: "queue.PriorityQueue" = queue.PriorityQueue()
+        self._ringer = ringer          # paused while the speaker talks: same device
         self._seq = itertools.count()
-        threading.Thread(target=self._run, name="announce", daemon=True).start()
+        self._queues: dict[str, "queue.PriorityQueue"] = {}
+        for output in self.OUTPUTS:
+            self._queues[output] = queue.PriorityQueue()
+            threading.Thread(target=self._run, args=(output,),
+                             name=f"announce-{output}", daemon=True).start()
 
     def say(self, text: str, urgent: bool = False, output: str = "speaker") -> None:
-        self._queue.put((0 if urgent else 1, next(self._seq), text, output, None))
+        self._queues[output].put((0 if urgent else 1, next(self._seq), text, None))
 
     def say_urgent(self, text: str) -> None:
         self.say(text, urgent=True)
@@ -312,29 +325,26 @@ class AnnouncementQueue:
     def say_and_wait(self, text: str, output: str = "speaker") -> bool:
         """Play and wait; False if it could not be played."""
         done = {"event": threading.Event(), "ok": False}
-        self._queue.put((1, next(self._seq), text, output, done))
+        self._queues[output].put((1, next(self._seq), text, done))
         done["event"].wait()
         return done["ok"]
 
-    def _run(self) -> None:
+    def _run(self, output: str) -> None:
+        # The ring uses the room speaker: free it only for speaker sentences
+        ringer = self._ringer if output == "speaker" else None
         while True:
-            _prio, _seq, text, output, done = self._queue.get()
+            _prio, _seq, text, done = self._queues[output].get()
             ok = False
-            # The ring uses the room speaker: free it only for speaker sentences
-            pause = getattr(self._ringer, "pause", None) if output == "speaker" else None
             try:
-                if pause:
-                    pause()
-                if output == "speaker":
-                    self._speak(text)
-                else:
-                    self._speak(text, output=output)
+                if ringer:
+                    ringer.pause()
+                self._speak(text, output=output)
                 ok = True
             except Exception as e:
                 log.error("Announcement failed: %s", type(e).__name__)
             finally:
-                if pause:
-                    self._ringer.resume()
+                if ringer:
+                    ringer.resume()
             if done is not None:
                 done["ok"] = ok
                 done["event"].set()
