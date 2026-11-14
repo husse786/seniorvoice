@@ -174,11 +174,15 @@ class Core:
     def __init__(self, supervisor: DialogSupervisor, ringer: Ringer,
                  help_handler: HelpHandler | None = None,
                  announce: Callable[[str], None] | None = None,
-                 with_reminders: bool = True):
+                 with_reminders: bool = True,
+                 announce_handset: Callable[[str], None] | None = None):
         self.supervisor = supervisor
         self.ringer = ringer
         self.help = help_handler or HelpHandler()
+        # Room speaker: Help, "please lift the handset" (A13). Handset: what the
+        # person on the phone hears, e.g. the reminder after pickup (A9)
         self.announce = announce or (lambda text: None)
+        self.announce_handset = announce_handset or self.announce
         self.events: "queue.Queue[InputEvent]" = queue.Queue()
         self.in_call = False
         # call_start reached the current dialog process (False after a restart)
@@ -196,23 +200,24 @@ class Core:
             self.reminders = ReminderScheduler(ringer, in_call=lambda: self.in_call)
             self.tickers.append(self.reminders.tick)
 
-    def _say(self, text: str) -> bool:
+    def _say(self, text: str, output: str = "speaker") -> bool:
         """Play a fixed sentence (no LLM). False if it could not be played."""
+        speak = self.announce_handset if output == "handset" else self.announce
         try:
-            return self.announce(text) is not False
+            return speak(text) is not False
         except Exception as e:
             log.error("Announcement failed: %s", type(e).__name__)
             return False
 
-    def _say_async(self, text: str) -> None:
+    def _say_async(self, text: str, output: str = "speaker") -> None:
         """Never block the core loop (Help, hook, reminders) with audio."""
-        threading.Thread(target=self._say, args=(text,), daemon=True).start()
+        threading.Thread(target=self._say, args=(text, output), daemon=True).start()
 
     def _on_dialog_restart(self, reason: str) -> None:
         with self._call_lock:
             self.call_delivered = False
         if self.in_call:
-            self._say_async(HANG_MESSAGE)
+            self._say_async(HANG_MESSAGE, output="handset")
 
     def _on_dialog_ready(self) -> None:
         # Handset lifted while the dialog was (re)starting: start the call now
@@ -239,7 +244,7 @@ class Core:
                 self.announcing = True
 
                 def announce_then_talk():
-                    ok = self._say(text)
+                    ok = self._say(text, output="handset")
                     self.reminders.announced(ok)
                     self.announcing = False
                     self._start_call_if_pending()
@@ -286,39 +291,44 @@ class AnnouncementQueue:
     """All fixed sentences of the core, one after another on one thread.
 
     Help sentences (urgent) go before waiting reminder or restart sentences,
-    so they never overlap other core speech. The dialog speaks over the
-    handset, the core over the room speaker (A9, A13).
+    so they never overlap other core speech. Help and "please lift the
+    handset" use the room speaker (A13); sentences for the person on the
+    phone (reminder after pickup, restart notice) use the handset (A9).
     """
 
-    def __init__(self, speak: Callable[[str], None], ringer=None):
+    def __init__(self, speak: Callable[..., None], ringer=None):
         self._speak = speak
         self._ringer = ringer          # paused while speaking: same speaker device
         self._queue: "queue.PriorityQueue" = queue.PriorityQueue()
         self._seq = itertools.count()
         threading.Thread(target=self._run, name="announce", daemon=True).start()
 
-    def say(self, text: str, urgent: bool = False) -> None:
-        self._queue.put((0 if urgent else 1, next(self._seq), text, None))
+    def say(self, text: str, urgent: bool = False, output: str = "speaker") -> None:
+        self._queue.put((0 if urgent else 1, next(self._seq), text, output, None))
 
     def say_urgent(self, text: str) -> None:
         self.say(text, urgent=True)
 
-    def say_and_wait(self, text: str) -> bool:
+    def say_and_wait(self, text: str, output: str = "speaker") -> bool:
         """Play and wait; False if it could not be played."""
         done = {"event": threading.Event(), "ok": False}
-        self._queue.put((1, next(self._seq), text, done))
+        self._queue.put((1, next(self._seq), text, output, done))
         done["event"].wait()
         return done["ok"]
 
     def _run(self) -> None:
         while True:
-            _prio, _seq, text, done = self._queue.get()
+            _prio, _seq, text, output, done = self._queue.get()
             ok = False
-            pause = getattr(self._ringer, "pause", None)
+            # The ring uses the room speaker: free it only for speaker sentences
+            pause = getattr(self._ringer, "pause", None) if output == "speaker" else None
             try:
                 if pause:
                     pause()
-                self._speak(text)
+                if output == "speaker":
+                    self._speak(text)
+                else:
+                    self._speak(text, output=output)
                 ok = True
             except Exception as e:
                 log.error("Announcement failed: %s", type(e).__name__)
@@ -330,10 +340,10 @@ class AnnouncementQueue:
                 done["event"].set()
 
 
-def _speak(text: str) -> None:
+def _speak(text: str, output: str = "speaker") -> None:
     """Announcement from the core (no LLM). Raises if it cannot be played."""
     from tts import speak
-    speak(text, output="speaker")   # core speaks over the room speaker (A13)
+    speak(text, output=output)
 
 
 def main() -> None:
@@ -365,7 +375,8 @@ def main() -> None:
     from family import run_sender
     run_sender(help_service.channel)
     core = Core(DialogSupervisor(), ringer, help_handler=help_service,
-                announce=voice.say_and_wait)
+                announce=voice.say_and_wait,
+                announce_handset=lambda text: voice.say_and_wait(text, output="handset"))
     if args.input == "gpio":
         GpioInput().start(core.events)
     else:

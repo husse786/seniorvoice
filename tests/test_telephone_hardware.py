@@ -302,3 +302,69 @@ def test_kalender_without_handset_asks_to_lift(env):
             break
         time.sleep(0.01)
     assert said == [core_mod.LIFT_HANDSET] and sent == []
+
+
+def test_core_sentences_for_the_caller_go_to_the_handset(env):
+    """A9/A13: reminder after pickup and restart notice in the handset;
+    "please lift the handset" on the room speaker."""
+    core_mod = env.load("core_service")
+    hw = __import__("hardware")
+    appts = __import__("appointments")
+    speaker, handset, sent = [], [], []
+
+    class Sup:
+        on_restart = None
+
+        def send(self, kind, **kw):
+            sent.append(kind)
+            return True
+
+        def check(self):
+            pass
+    core = core_mod.Core(Sup(), hw.SimulatedRinger(), announce=speaker.append,
+                         announce_handset=handset.append)
+    now = datetime.now(timezone.utc)
+    appts.add_appointment("Arzt", (now + timedelta(seconds=1)).astimezone(ZoneInfo("Europe/Zurich")),
+                          "Spitex", pre_minutes=0, now=now - timedelta(minutes=1))
+    time.sleep(1.1)
+    core.tick()
+    core.handle(hw.InputEvent("hook_off"))
+    for _ in range(100):
+        if sent:
+            break
+        time.sleep(0.02)
+    assert handset and handset[0].startswith("Guten Tag. Eine Erinnerung")
+    core._on_dialog_restart("test")
+    for _ in range(50):
+        if len(handset) == 2:
+            break
+        time.sleep(0.01)
+    assert handset[1] == core_mod.HANG_MESSAGE
+    core.handle(hw.InputEvent("hook_on"))
+    core.handle(hw.InputEvent("button", "heute"))
+    for _ in range(50):
+        if speaker:
+            break
+        time.sleep(0.01)
+    assert speaker == [core_mod.LIFT_HANDSET] and len(handset) == 2
+
+
+def test_announcement_queue_routes_output_and_pauses_ring_only_for_speaker(env):
+    core_mod = env.load("core_service")
+    played, events = [], []
+
+    class Ringer:
+        def pause(self):
+            events.append("pause")
+
+        def resume(self):
+            events.append("resume")
+
+    def speak(text, output="speaker"):
+        played.append((text, output))
+    q = core_mod.AnnouncementQueue(speak, ringer=Ringer())
+    assert q.say_and_wait("Erinnerung", output="handset") is True
+    assert events == []
+    assert q.say_and_wait("Hilfe") is True
+    assert played == [("Erinnerung", "handset"), ("Hilfe", "speaker")]
+    assert events == ["pause", "resume"]
