@@ -58,7 +58,7 @@ Hinweise:
 - **Gabel:** Mit dem Multimeter prüfen. FS26: aufgelegt = geschlossen (NC). Dann `HOOK_OFFHOOK_LEVEL=1` (Standard). Ist der Schalter umgekehrt (aufgelegt = offen), `HOOK_OFFHOOK_LEVEL=0` setzen, nicht umlöten.
 - **Lange Kabel (über ca. 50 cm):** Bei Fehlauslösungen zusätzlich 10 kΩ von GPIO nach 3,3 V (Stift 1) oder `GPIO_DEBOUNCE_MS` erhöhen.
 - **GPIO19 und GPIO21** sind auch I2S-Pins. Mit USB-Audio kein Problem; wird später ein I2S-Verstärker-HAT eingesetzt, Rat und Hilfe auf andere Pins legen (nur `BUTTON_PINS` ändern).
-- **PIR-Sensor:** Laut README hängt der FS26-PIR an GPIO17, also am Gabel-Pin. `core_service.py` nutzt den PIR nicht: **PIR abstecken**, bevor die Gabel angeschlossen wird.
+- **PIR-Sensor:** Der FS26-PIR hing an GPIO4 (Stift 7), nicht an GPIO17 (FS26-Log 006, `PIR_GPIO_PIN=4`); kein Konflikt mit der Gabel. Im Konzept entfällt der PIR, `core_service.py` nutzt ihn nicht.
 - **AI HAT+ 2:** wird über PCIe angeschlossen; die GPIO-Leiste muss oben zugänglich bleiben (Stapel-Stiftleiste). Beim Auspacken prüfen, ob die Leiste mitgeliefert wird und ins Gehäuse passt.
 
 ### Audio
