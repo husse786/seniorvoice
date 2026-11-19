@@ -158,6 +158,10 @@ class Portal:
         if status == 0:
             return 503, {"error": "offline", "last_seen": device["last_seen"]}
         self.directory.mark_seen(device_id)
+        if status == 401:
+            # The device refused the portal's token. Not the browser's session:
+            # passing 401 on would sign the person out of the portal.
+            return 502, {"error": "Gerätetoken im Portal passt nicht zum Gerät"}
         return status, data
 
 
@@ -207,9 +211,12 @@ def make_handler(portal: Portal, allowed_hosts: list[str]):
                     return v
             return None
 
-        def _cookie(self, value: str, max_age: int) -> str:
+        def _cookie(self, value: str, max_age: int | None = None) -> str:
+            # Without Max-Age the cookie lives until the browser closes; the
+            # idle timeout is enforced on the server (Sessions)
             secure = "; Secure" if PORTAL_SECURE_COOKIE else ""
-            return f"sv_session={value}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}{secure}"
+            age = "" if max_age is None else f"; Max-Age={max_age}"
+            return f"sv_session={value}; Path=/; HttpOnly; SameSite=Strict{age}{secure}"
 
         def _body(self) -> bytes:
             length = int(self.headers.get("Content-Length", "0") or 0)
@@ -232,6 +239,16 @@ def make_handler(portal: Portal, allowed_hosts: list[str]):
             self._handle("DELETE")
 
         def _handle(self, method: str) -> None:
+            try:
+                self._route(method)
+            except Exception as e:          # never leave the browser without an answer
+                sys.stderr.write(f"Portal error: {type(e).__name__}\n")
+                try:
+                    self._json(500, {"error": "interner Fehler"})
+                except OSError:
+                    pass
+
+        def _route(self, method: str) -> None:
             if not self._host_ok():
                 return self._json(403, {"error": "forbidden"})
             path = urlsplit(self.path).path
@@ -279,7 +296,7 @@ def make_handler(portal: Portal, allowed_hosts: list[str]):
                 time.sleep(0.5)
                 return self._json(401, {"error": "Anmeldung fehlgeschlagen"})
             sid = portal.sessions.create(account)
-            self._json(200, account, {"Set-Cookie": self._cookie(sid, SESSION_IDLE_SECONDS)})
+            self._json(200, account, {"Set-Cookie": self._cookie(sid)})
 
         def _static(self, path: str) -> None:
             name = {"/": "index.html"}.get(path, path.lstrip("/"))

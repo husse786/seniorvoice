@@ -235,7 +235,10 @@ def test_phone_page_on_tunnel_address_accepts_that_host(env):
     # On the Pi the page listens on its WireGuard address; 127.0.0.2 stands in
     sim_phone = env.load("sim_phone")
     p = sim_phone.SimPhone(0, host="127.0.0.2")
-    p.start(queue.Queue())
+    try:
+        p.start(queue.Queue())
+    except OSError:
+        pytest.skip("127.0.0.2 not available here (macOS has only 127.0.0.1)")
     try:
         port = p.server.server_address[1]
         req = urllib.request.Request(f"http://127.0.0.2:{port}/state")

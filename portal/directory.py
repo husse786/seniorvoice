@@ -216,8 +216,11 @@ class Directory:
             raise DirectoryError("Bezeichnung, Name und Token sind nötig")
         conn = self._conn()
         try:
-            conn.execute("INSERT OR REPLACE INTO devices (id, label, senior_name, api_url, token) "
-                         "VALUES (?, ?, ?, ?, ?)",
+            # Upsert, not REPLACE: a replaced row would drop its assignments
+            conn.execute("INSERT INTO devices (id, label, senior_name, api_url, token) "
+                         "VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
+                         "label = excluded.label, senior_name = excluded.senior_name, "
+                         "api_url = excluded.api_url, token = excluded.token",
                          (device_id, label.strip(), senior_name.strip(), api_url.rstrip("/"),
                           token.strip()))
             conn.commit()

@@ -151,7 +151,7 @@ async function loadDevices() {
     el("b", {}, d.senior_name),
     el("span", { class: "small muted" }, d.label), el("br"),
     el("span", { class: "small" }, el("span", { class: `dot ${d.online ? "on" : "off"}` }),
-      d.online ? "online" : d.no_access ? "kein Zugriff (Freigabe am Gerät fehlt)" : "offline – " + since(d.last_seen)))));
+      d.online ? "online" : d.no_access ? "kein Zugriff (Token oder Freigabe am Gerät prüfen)" : "offline – " + since(d.last_seen)))));
   $("devices-area").hidden = me.role === "angehoerige" && devices.length === 1;
   if (current) openDevice(current.id, tab);
   else if (devices.length === 1) openDevice(devices[0].id);
@@ -406,7 +406,7 @@ function latencyChart(days, target) {
     el("span", {}, el("i", { class: "lt" }), `Ziel ${target / 1000} s`)));
 }
 
-const CHANNEL_LABEL = { ConsoleChannel: "Testkanal (Anzeige auf der Telefon-Seite)", TelegramChannel: "Telegram" };
+const CHANNEL_LABEL = { ConsoleChannel: "Testkanal (Anzeige auf der Telefon-Seite)", EmailChannel: "E-Mail", TelegramChannel: "Telegram" };
 const DIALOG_LABEL = { bereit: "bereit", laedt: "lädt", neustart: "startet neu", aus: "aus" };
 
 async function renderTechnik(refresh) {

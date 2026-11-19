@@ -160,6 +160,7 @@ def test_cookie_is_httponly_samesite(setup):
     with opener.open(req, timeout=10) as resp:
         cookie = resp.headers["Set-Cookie"]
     assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+    assert "Max-Age" not in cookie          # idle timeout is on the server
 
 
 def test_refuses_all_interfaces(setup):
@@ -268,3 +269,15 @@ def test_static_files_and_security_headers(setup):
             assert resp.status == 200
     with pytest.raises(urllib.error.HTTPError):
         opener.open(setup["base"] + "/../server.py", timeout=10)
+
+
+def test_wrong_device_token_does_not_sign_out(setup):
+    d = setup["dir"]
+    dev = d.device("keller")
+    d.add_device("keller", dev["label"], dev["senior_name"], dev["api_url"], "falscher-token")
+    b = Browser(setup["base"])
+    b.login("sandra", setup["secrets"]["sandra"])
+    status, body = b.call("GET", "/api/devices/keller/v1/appointments")
+    assert status == 502 and "token" in body["error"].lower()
+    assert b.call("GET", "/api/me")[0] == 200            # still signed in
+    assert b.call("GET", "/api/devices")[1]["devices"][0]["no_access"] is True
