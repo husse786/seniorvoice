@@ -325,18 +325,86 @@ async function renderRat() {
 }
 
 // --- Zugriffsprotokoll ---
+// The device stores each request as "METHOD /path" plus the HTTP status
+// (pipeline/device_api.py, unchanged). Here it is put into plain German;
+// unknown actions stay visible as they are, so nothing is hidden.
+
+const AUDIT_ACTION = {
+  "GET /v1/status": "Prüfen, ob das Gerät erreichbar ist",
+  "GET /v1/appointments": "Termine und Medikamente ansehen",
+  "POST /v1/appointments": "Termin oder Medikament eintragen",
+  "PUT /v1/appointments/{id}": "Termin oder Medikament ändern",
+  "DELETE /v1/appointments/{id}": "Termin oder Medikament löschen",
+  "GET /v1/help": "Hilfe-Verlauf ansehen",
+  "GET /v1/advice": "Rat-Infos ansehen",
+  "POST /v1/advice": "Rat-Info eintragen",
+  "PUT /v1/advice/{id}": "Rat-Info ändern",
+  "DELETE /v1/advice/{id}": "Rat-Info löschen",
+  "GET /v1/audit": "Zugriffsprotokoll ansehen",
+  "GET /v1/health": "Technik-Ansicht ansehen",
+};
+const AUDIT_GROUP_GAP_MS = 5 * 60000;   // repeated automatic refreshes become one row
+
+function auditWhat(e) {
+  const known = AUDIT_ACTION[e.action];
+  if (!known) {
+    const unknown = /\(unknown\)$/.test(e.action || "");
+    return unknown ? "Unbekannte Anfrage" : (e.action || "Unbekannte Anfrage");
+  }
+  return e.target ? `${known} (Eintrag Nr. ${e.target})` : known;
+}
+function auditResult(code) {
+  if (code >= 200 && code < 300) return ["ok", "erledigt"];
+  if (code === 403) return ["bad", "abgelehnt: keine Berechtigung"];
+  if (code === 404) return ["bad", "nicht gefunden"];
+  if (code >= 400 && code < 500) return ["bad", "abgelehnt: ungültige Eingabe"];
+  return ["bad", "Fehler am Gerät"];
+}
+function auditWho(e) { return me && e.person_id === me.login ? "Sie" : e.person_id; }
+function hhmm(s) {
+  const d = new Date(s);
+  return isNaN(d) ? "" : d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+}
+// Entries come newest first. Consecutive identical requests (same person,
+// action, target, result) less than 5 minutes apart are shown as one row.
+function groupAudit(entries) {
+  const groups = [];
+  for (const e of entries) {
+    const g = groups[groups.length - 1];
+    const t = new Date(e.at).getTime();
+    if (g && g.person_id === e.person_id && g.action === e.action && g.target === e.target
+        && g.result === e.result && g.oldestMs - t <= AUDIT_GROUP_GAP_MS) {
+      g.count += 1; g.oldest = e.at; g.oldestMs = t;
+    } else {
+      groups.push({ ...e, count: 1, newest: e.at, oldest: e.at, oldestMs: t });
+    }
+  }
+  return groups;
+}
 
 async function renderAudit() {
   const data = await load("/v1/audit");
   if (!data) return;
-  const rows = data.entries.map((e) => el("tr", {}, el("td", {}, fmtIso(e.at)), el("td", {}, e.person_id),
-    el("td", {}, e.action), el("td", {}, e.target || ""), el("td", {}, String(e.result))));
+  const admin = me.role === "admin";
+  const rows = groupAudit(data.entries).map((g) => {
+    const [cls, label] = auditResult(g.result);
+    const when = g.count > 1 ? `${fmtIso(g.oldest)} – ${hhmm(g.newest)}` : fmtIso(g.newest);
+    return el("tr", {},
+      el("td", {}, when),
+      el("td", {}, auditWho(g)),
+      el("td", {}, auditWhat(g),
+        g.count > 1 ? el("span", { class: "src" }, `${g.count} Abrufe hintereinander`) : null,
+        admin ? el("span", { class: "src mono" }, `${g.action}${g.target ? " #" + g.target : ""} → ${g.result}`) : null),
+      el("td", {}, el("span", { class: `status st-audit-${cls}` }, label)));
+  });
   $("panel").replaceChildren(el("div", { class: "card" }, el("h3", {}, "Zugriffsprotokoll des Geräts"),
-    el("p", { class: "small muted" }, me.role === "admin" ? "Alle Zugriffe auf dieses Gerät (30 Tage)."
-      : "Ihre eigenen Zugriffe auf dieses Gerät (30 Tage)."),
+    el("p", { class: "small muted" }, admin
+      ? "Wer wann über das Portal auf dieses Gerät zugegriffen hat (30 Tage). Inhalte werden nicht protokolliert."
+      : "Wann Sie über das Portal auf dieses Gerät zugegriffen haben (30 Tage). Inhalte werden nicht protokolliert."),
     data.entries.length ? el("div", { class: "tbl-wrap" }, el("table", {},
-      el("thead", {}, el("tr", {}, ...["Wann", "Wer", "Aktion", "Ziel", "Ergebnis"].map((h) => el("th", {}, h)))),
-      el("tbody", {}, rows))) : el("p", { class: "empty" }, "Keine Einträge.")));
+      el("thead", {}, el("tr", {}, ...["Wann", "Wer", "Was", "Ergebnis"].map((h) => el("th", {}, h)))),
+      el("tbody", {}, rows))) : el("p", { class: "empty" }, "Keine Einträge."),
+    el("p", { class: "small muted" }, "Offene Seiten wie «Termine» laden alle 15 Sekunden neu. Solche Wiederholungen sind zu einer Zeile zusammengefasst.")));
 }
 
 async function renderLogins() {
