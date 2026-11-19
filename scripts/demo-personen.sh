@@ -2,6 +2,7 @@
 # Legt die Demo-Personen an (Frau Keller, Sandra Keller, Projektteam) und
 # richtet Gerät und Portal so ein, dass sie zusammenpassen. Darf mehrfach
 # laufen: Vorhandenes bleibt unverändert. Anleitung: docs/simulation.md
+# Läuft vor jedem Start mit --still --ohne-termine (scripts/vorbereiten.sh).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -9,4 +10,4 @@ cd "$ROOT"
 set -a; . ./.env; [ -f portal/.env ] && . portal/.env; set +a
 PY="${PYTHON:-$ROOT/.venv/bin/python}"
 [ -x "$PY" ] || PY="$(command -v python3)"
-exec "$PY" scripts/demo_personen.py
+exec "$PY" scripts/demo_personen.py "$@"

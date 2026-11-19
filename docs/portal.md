@@ -18,27 +18,15 @@ Anmeldung mit Passwort **und** 6-stelligem Code aus einer Authenticator-App (z.B
 
 ## Demo auf einem Rechner (Mac)
 
-Voraussetzung: das simulierte Gerät ist eingerichtet (`docs/simulation.md`, Schritte 1 bis 6). Der dort erzeugte Gerätetoken wird hier gebraucht.
+```bash
+scripts/start-demo.sh
+```
 
-1. Konten anlegen. Der Login muss **gleich** heissen wie die Freigabe am Gerät (Schritt 5 in `docs/simulation.md`):
-   ```bash
-   cd portal
-   python portal_cli.py add-account sandra.keller "Sandra Keller" angehoerige
-   python portal_cli.py add-account admin.team "Projektteam" admin
-   ```
-   Jeweils wird ein Passwort abgefragt und ein Link `otpauth://…` ausgegeben. Diesen Link (oder den Schlüssel) in der Authenticator-App auf dem Handy eintragen.
-2. Gerät eintragen und zuordnen (der Token wird abgefragt):
-   ```bash
-   python portal_cli.py add-device keller "Telefon Frau Keller" "Frau Keller" http://127.0.0.1:8770
-   python portal_cli.py assign sandra.keller keller
-   python portal_cli.py list
-   ```
-3. Alles starten:
-   ```bash
-   scripts/start-demo.sh                   # Portal + simuliertes Gerät
-   SIM_AUDIO=text scripts/start-demo.sh    # dasselbe im Textmodus
-   ```
-4. Zwei Browserfenster nebeneinander: Portal `http://127.0.0.1:8780`, Telefon `http://127.0.0.1:8771`.
+Startet Portal und simuliertes Gerät zusammen. Beim ersten Start legt es Konten, Gerät, Zuordnung, Freigaben und Hilfe-Kontakte an (`scripts/demo-personen.sh`, Passwort wird gefragt, Code-Schlüssel einmal angezeigt). Einzelheiten und was bei einer älteren `.env` passiert: `docs/simulation.md`, Abschnitt «Starten».
+
+Zwei Browserfenster nebeneinander: Portal `http://127.0.0.1:8780`, Telefon `http://127.0.0.1:8771`.
+
+Von Hand geht es weiterhin mit `portal/portal_cli.py` (`add-account`, `add-device`, `assign`, `list`) und `pipeline/device_api_cli.py grant`. Der Login muss gleich heissen wie die Freigabe am Gerät.
 
 Ablauf für die Präsentation: siehe «Demo-Ablauf» in `docs/simulation.md`. Das Portal aktualisiert Termine, Hilfe-Verlauf und Technik alle 15 Sekunden von selbst.
 

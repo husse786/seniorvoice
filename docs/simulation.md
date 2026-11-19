@@ -27,34 +27,40 @@ Datenschutz wie am Gerät: Gesprochenes, Getipptes und Antworten stehen nur im A
 
 ## Einrichten auf dem Mac (einmal)
 
-1. **Python 3.11 oder neuer** und **Ollama** installieren (ollama.com, App für macOS). Dann das Modell laden:
+1. **Python 3.11 oder neuer** (`brew install python@3.12`) und **Ollama** installieren (ollama.com, App für macOS). Dann das Modell laden:
    ```bash
    ollama pull gemma3:1b
    ```
-2. Code, virtuelle Umgebung und Stimme:
+2. Code und virtuelle Umgebung (nicht im iCloud-Ordner, Vorschlag `~/Developer/seniorvoice`):
    ```bash
    git clone https://github.com/husse786/seniorvoice.git && cd seniorvoice
-   python3 -m venv .venv && . .venv/bin/activate
-   pip install -r pipeline/requirements.txt piper-tts
-   python -m piper.download_voices --data-dir ~/.local/share/piper-voices de_DE-thorsten-medium
+   python3 -m venv .venv
    ```
-3. Demo-Personen anlegen (Frau Keller, Sandra Keller, Projektteam, Gerätetoken, Freigaben, Hilfe-Kontakt, Beispieltermine, Portal-Konten):
-   ```bash
-   scripts/demo-personen.sh
-   ```
-   Fragt pro Portal-Konto ein Passwort und zeigt den Code-Schlüssel für die Authenticator-App einmal an. Beides gleich sichern, zum Beispiel in der Passwörter-App des Mac. Das Skript darf mehrfach laufen. Was schon da ist, bleibt unverändert.
-4. Mikrofon freigeben: macOS fragt beim ersten Start, ob das Terminal das Mikrofon benutzen darf. Erlauben. Falls verpasst: Systemeinstellungen, Datenschutz & Sicherheit, Mikrofon, Terminal einschalten.
+3. Mikrofon freigeben: macOS fragt beim ersten Start, ob das Terminal das Mikrofon benutzen darf. Erlauben. Falls verpasst: Systemeinstellungen, Datenschutz & Sicherheit, Mikrofon, Terminal einschalten.
+
+Mehr ist nicht einzurichten. Den Rest erledigt der erste Start.
 
 ## Starten
 
 ```bash
-scripts/start-simulation.sh
-scripts/start-portal.sh        # zweites Terminal
+scripts/start-demo.sh
 ```
 
-Dann `http://127.0.0.1:8771` (Telefon) und `http://127.0.0.1:8780` (Portal) im Browser öffnen. Beenden mit Ctrl+C.
+Das startet Portal und Telefon zusammen. Dann `http://127.0.0.1:8771` (Telefon) und `http://127.0.0.1:8780` (Portal) im Browser öffnen. Beenden mit Ctrl+C.
 
-Nur Tippen erzwingen, zum Beispiel in einem lauten Raum: `SIM_AUDIO=text scripts/start-simulation.sh`.
+Vor jedem Start prüft `scripts/vorbereiten.sh` den Rechner und richtet ein, was fehlt:
+
+| Fall | Was der Start macht |
+|---|---|
+| Erster Start (keine `.env`, kein Gerätetoken) | legt die Demo-Personen an: Frau Keller, Sandra Keller, Spitex Winterthur, Projektteam, mit Gerätetoken, Freigaben, Hilfe-Kontakten, Beispielterminen und Portal-Konten (`scripts/demo-personen.sh`). Fragt pro Portal-Konto ein Passwort und zeigt den Code-Schlüssel für die Authenticator-App einmal an. Beides gleich sichern, zum Beispiel in der Passwörter-App des Mac |
+| `.env` aus einer früheren Einrichtung mit `SIM_AUDIO=text` oder `SIM_AUDIO=audio` | schaltet die Zeile aus und sagt es im Terminal. Eine Kopie der alten Datei bleibt als `.env.vorher-…` liegen |
+| Whisper, Piper oder die deutsche Stimme fehlen (Mac) | installiert sie einmal in `.venv` nach. Ohne Internet läuft der Start trotzdem, dann nur mit Tippen |
+
+Im Terminal und unten auf der Telefon-Seite steht danach, was dieser Start benutzt, zum Beispiel «Ton an. Mikrofon: MacBook Pro Microphone. Tippen geht auch.» Ist es das falsche Mikrofon (iPhone, Docking-Station), unter Systemeinstellungen, Ton, Eingabe das richtige wählen und neu starten.
+
+Nur Tippen, zum Beispiel in einem lauten Raum: `SIM_AUDIO=text scripts/start-demo.sh`. Das gilt nur für diesen Start; in `.env` muss dafür nichts stehen.
+
+`scripts/start-simulation.sh` startet nur das Gerät ohne Portal (Pi, oder Portal läuft schon). Es macht vorher dieselbe Prüfung.
 
 ## Demo-Ablauf (Z7: Termin im Portal kommt am Gerät an)
 
