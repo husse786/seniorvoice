@@ -70,7 +70,19 @@ Nur Tippen, zum Beispiel in einem lauten Raum: `SIM_AUDIO=text scripts/start-dem
 2. Zur vollen Minute klingelt das Telefon: Der Hörer wackelt, der Bildschirm zeigt die Erinnerung, der Klingelton ist hörbar.
 3. Hörer anklicken: Er hebt sich ab, und das Gerät sagt die Erinnerung an. Ohne fällige Erinnerung begrüsst es stattdessen mit Namen, nennt den nächsten Termin von heute und stellt eine kleine Frage (Texte: `docs/begruessung-und-persona.md`).
 4. Im Portal steht beim Termin jetzt «bestätigt».
-5. «Hilfe» drücken: Der Bildschirm zeigt, wer benachrichtigt wird, im Gesprächsfeld steht die Meldung an die Kontaktperson. «Ich kümmere mich» schliesst den Alarm, das Gerät bestätigt laut.
+5. «Hilfe» drücken: Das Gerät sagt «Ich informiere gleich Sandra …», der Bildschirm zählt 10 Sekunden herunter. Danach steht im Gesprächsfeld die Meldung an die Kontaktperson. «Ich kümmere mich» schliesst den Alarm, das Gerät bestätigt laut.
+6. Abbrechen zeigen: «Hilfe» drücken und nach 2 bis 10 Sekunden nochmals «Hilfe». Das Gerät sagt «Abgebrochen …», es geht keine Meldung raus, im Portal steht im Hilfe-Verlauf «abgebrochen».
+
+### Hilfe abbrechen (19.11.2026)
+
+| Was | Verhalten |
+|---|---|
+| Erster Druck | Meldung wartet 10 Sekunden. Ansage: «Ich informiere gleich …, falls das ein Versehen war, drücken Sie nochmals Hilfe.» |
+| Zweiter Druck nach 2 bis 10 Sekunden | Abbruch. Niemand wurde informiert, darum keine Entwarnung nötig. Status «abgebrochen» im Hilfe-Verlauf (30 Tage). |
+| Drücke in den ersten 2 Sekunden | zählen nicht (Schutz vor schnellem Mehrfachdrücken in Panik) |
+| Druck nach dem Versand | wie bisher: «Ich habe … bereits informiert» |
+| Nächster Druck bis 2 Minuten nach einem Abbruch | geht sofort raus und lässt sich nicht abbrechen |
+| Neustart | Ein abgebrochener Ruf kommt nicht zurück. Ein noch offener Ruf endet wie bisher mit «Bitte rufen Sie 144 an». |
 
 ## Was die Simulation nicht zeigt
 

@@ -306,14 +306,16 @@ document.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>post("/event",{ki
 $("ack").onclick=()=>post("/event",{kind:"sim_ack"});
 $("say").onsubmit=e=>{e.preventDefault();const t=$("text").value.trim();if(t){post("/say",{text:t});$("text").value="";}};
 function render(s){inCall=!!s.in_call;
- $("status").textContent=s.help_open?"Hilfe läuft":(s.ringing?"Es klingelt – bitte abheben":(s.announcing?"Ansage läuft …":(inCall?"Gespräch läuft":"Aufgelegt")));
+ const HP={wartet:"Hilfe: wird gleich verschickt – nochmals «Hilfe» bricht ab",unterwegs:"Hilfe läuft",abgebrochen:"Hilfe abgebrochen, niemand informiert"};
+ const hp=s.help_phase||(s.help_open?"unterwegs":"");
+ $("status").textContent=hp?HP[hp]||"Hilfe läuft":(s.ringing?"Es klingelt – bitte abheben":(s.announcing?"Ansage läuft …":(inCall?"Gespräch läuft":"Aufgelegt")));
  const p=$("phone");p.classList.toggle("lifted",inCall);p.classList.toggle("ringing",!!s.ringing&&!inCall);
  $("hookLabel").textContent=inCall?"Auflegen":"Abheben";$("hook").setAttribute("aria-label",inCall?"Hörer auflegen":"Hörer abheben");
  $("led").className="led "+(s.dialog==="bereit"?"on":"warn");
  $("mode").textContent=s.text_mode?"Nur Tippen":"Sprechen oder tippen";
  $("note").textContent=s.audio_note||"";$("note").hidden=!s.audio_note;
- $("ack").hidden=!s.help_open;
- $("meta").replaceChildren();[DIALOG[s.dialog]||s.dialog,s.help_open?"Hilfe läuft":""].filter(Boolean)
+ $("ack").hidden=hp!=="unterwegs";
+ $("meta").replaceChildren();[DIALOG[s.dialog]||s.dialog,hp?HP[hp]||"Hilfe läuft":""].filter(Boolean)
   .forEach(t=>{const x=document.createElement("span");x.textContent=t;$("meta").appendChild(x);});
  const log=$("log");const lines=s.lines||[];const newest=lines.length?lines[lines.length-1].id:0;
  if(newest!==lastId||lines.length!==log.querySelectorAll(".line").length){lastId=newest;log.replaceChildren();

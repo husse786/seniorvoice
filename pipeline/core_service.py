@@ -321,9 +321,12 @@ class Core:
     def phone_state(self) -> dict:
         """What the simulated phone page shows (this computer only)."""
         is_open = getattr(self.help, "is_open", None)
+        phase = getattr(self.help, "phase", None)
         return {"in_call": self.in_call, "ringing": bool(getattr(self.ringer, "ringing", False)),
                 "announcing": self.announcing, "dialog": self.supervisor.health_state(),
-                "help_open": bool(is_open()) if is_open else False}
+                "help_open": bool(is_open()) if is_open else False,
+                # "wartet" (second press cancels), "unterwegs", "abgebrochen" or None
+                "help_phase": phase() if phase else None}
 
     def tick(self) -> None:
         for ticker in self.tickers:
@@ -548,7 +551,6 @@ def main() -> None:
     voice = AnnouncementQueue(_speak, ringer=ringer)
     help_service = HelpService(channel, announce=voice.say_urgent,
                                senior_name=os.getenv("SENIOR_NAME", ""))
-    help_service.run_worker()
     from family import run_sender
     run_sender(help_service.channel)
     core = Core(DialogSupervisor(), ringer, help_handler=help_service,
@@ -604,6 +606,10 @@ def main() -> None:
         GpioInput().start(core.events)
     else:
         KeyboardInput().start(core.events)
+    # Only now: the worker's first step may say "Bitte rufen Sie 144 an" for
+    # an alert left open by a restart, and that must reach the screen and the
+    # phone page too (their text sink is set above)
+    help_service.run_worker()
     signal.signal(signal.SIGTERM, lambda *a: setattr(core, "running", False))
     log.info("Core started (input %s, audio %s)", args.input, "text" if text_mode else "audio")
     core.run()

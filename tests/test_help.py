@@ -32,12 +32,28 @@ def help_env(env):
     return help_mod, service, channel, clock, said
 
 
+def press_and_send(help_mod, service, clock):
+    """Press Help and let the cancel window pass, so the notice goes out."""
+    service.trigger()
+    service.step()
+    clock.advance(help_mod.CANCEL_SECONDS)
+    service.step()
+
+
 def test_help_notifies_first_contact_and_confirms(help_env):
     help_mod, service, channel, clock, said = help_env
     service.trigger()
     assert said == []                                   # core thread: no DB, no network
     service.step()
-    assert said == ["Ich informiere jetzt Sandra. Im Notfall rufen Sie bitte 144 an."]
+    assert said == ["Ich informiere gleich Sandra. Falls das ein Versehen war, "
+                    "drücken Sie nochmals Hilfe."]
+    assert channel.sent == []                           # waits for a possible cancel
+    clock.advance(9)
+    service.step()
+    assert channel.sent == []
+    clock.advance(1)
+    service.step()
+    assert said[-1] == "Ich habe Sandra informiert. Im Notfall rufen Sie bitte 144 an."
     address, text, alert_id = channel.sent[0]
     assert address == "chat-sandra"
     assert "Frau Keller" in text and "Hilfe-Knopf" in text and "kein Notruf" in text
@@ -45,8 +61,7 @@ def test_help_notifies_first_contact_and_confirms(help_env):
 
 def test_acknowledgement_closes_alert(help_env):
     help_mod, service, channel, clock, said = help_env
-    service.trigger()
-    service.step()
+    press_and_send(help_mod, service, clock)
     alert_id = channel.sent[0][2]
     channel.simulate_ack(alert_id, "chat-sandra")
     clock.advance(30)
@@ -58,8 +73,7 @@ def test_acknowledgement_closes_alert(help_env):
 
 def test_escalates_after_10_minutes_then_says_144(help_env):
     help_mod, service, channel, clock, said = help_env
-    service.trigger()
-    service.step()
+    press_and_send(help_mod, service, clock)
     clock.advance(9 * 60)
     service.step()
     assert len(channel.sent) == 1                       # not before 10 min
@@ -76,8 +90,7 @@ def test_escalates_after_10_minutes_then_says_144(help_env):
 
 def test_ack_from_unknown_sender_is_ignored(help_env):
     help_mod, service, channel, clock, said = help_env
-    service.trigger()
-    service.step()
+    press_and_send(help_mod, service, clock)
     channel.simulate_ack(channel.sent[0][2], "chat-stranger")
     service.step()
     assert help_mod.list_alerts()[0]["status"] == "offen"
@@ -89,17 +102,18 @@ def test_no_network_says_144_quickly(help_env, monkeypatch):
     def broken(*a):
         raise OSError("no network")
     monkeypatch.setattr(channel, "send_alert", broken)
-    service.trigger()
+    press_and_send(help_mod, service, clock)          # 60 s count from the end of the wait
+    clock.advance(59)
     service.step()
-    clock.advance(61)
+    assert help_mod.list_alerts()[0]["status"] == "offen"
+    clock.advance(2)
     service.step()
     assert said[-1] == "Ich konnte niemanden erreichen. Bitte rufen Sie 144 an."
 
 
 def test_second_press_does_not_spam(help_env):
     help_mod, service, channel, clock, said = help_env
-    service.trigger()
-    service.step()
+    press_and_send(help_mod, service, clock)
     service.trigger()
     assert said[-1].startswith("Ich habe Sandra bereits informiert")
     assert len(help_mod.list_alerts()) == 1
@@ -173,15 +187,14 @@ def test_help_works_while_dialog_hangs_with_real_service(env, monkeypatch):
             if said:
                 break
             time.sleep(0.01)
-        assert said == ["Ich informiere jetzt Sandra. Im Notfall rufen Sie bitte 144 an."]
+        assert said == [help_mod.SAY_HOLD.format(name="Sandra")]
     finally:
         service.stop()
 
 
 def test_escalation_gives_next_contact_its_own_delivery_deadline(help_env, monkeypatch):
     help_mod, service, channel, clock, said = help_env
-    service.trigger()
-    service.step()                                      # delivered to Sandra
+    press_and_send(help_mod, service, clock)                                      # delivered to Sandra
     real = channel.send_alert
 
     def spitex_unreachable(address, text, alert_id):
@@ -202,8 +215,7 @@ def test_escalation_gives_next_contact_its_own_delivery_deadline(help_env, monke
 
 def test_editing_contacts_during_alert_does_not_break_it(help_env):
     help_mod, service, channel, clock, said = help_env
-    service.trigger()
-    service.step()
+    press_and_send(help_mod, service, clock)
     help_mod.set_contacts([])                           # list replaced during the alert
     service.trigger()                                   # second press
     assert said[-1].startswith("Ich habe Sandra bereits informiert")
@@ -214,8 +226,7 @@ def test_editing_contacts_during_alert_does_not_break_it(help_env):
 
 def test_open_alert_after_restart_is_closed_with_144(help_env):
     help_mod, service, channel, clock, said = help_env
-    service.trigger()
-    service.step()                                      # alert open, then the core restarts
+    press_and_send(help_mod, service, clock)            # alert open, then the core restarts
     restarted = help_mod.HelpService(channel, announce=said.append,
                                      now=lambda: clock.wall, monotonic=lambda: clock.mono)
     clock.advance(120)
@@ -224,7 +235,7 @@ def test_open_alert_after_restart_is_closed_with_144(help_env):
     assert help_mod.list_alerts()[0]["status"] == "niemand erreicht"
     restarted.trigger()
     restarted.step()                                    # a new press works normally
-    assert said[-1].startswith("Ich informiere jetzt Sandra")
+    assert said[-1].startswith("Ich informiere gleich Sandra")
 
 
 def test_database_failure_still_says_144(help_env, monkeypatch):
@@ -237,3 +248,169 @@ def test_database_failure_still_says_144(help_env, monkeypatch):
     service.trigger()
     service.step()
     assert said == [help_mod.SAY_CALL_144]
+
+
+# --- Cancel (Husey 19.11.2026): second press within 10 s, before sending ---
+
+def test_second_press_within_window_cancels_and_nobody_is_told(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(5)
+    service.trigger()                                   # second press
+    service.step()
+    assert said[-1] == help_mod.SAY_CANCELLED
+    clock.advance(60)
+    service.step()
+    assert channel.sent == []                           # no notice, so no all-clear needed
+    alert = help_mod.list_alerts()[0]
+    assert alert["status"] == "abgebrochen" and not alert["delivered"]
+
+
+def test_quick_panic_presses_do_not_cancel(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.trigger()                                   # before the worker even ran
+    service.step()
+    clock.advance(1)
+    service.trigger()
+    service.trigger()
+    service.step()
+    assert help_mod.SAY_CANCELLED not in said
+    clock.advance(9)
+    service.step()
+    assert [s[0] for s in channel.sent] == ["chat-sandra"]
+    assert help_mod.list_alerts()[0]["status"] == "offen"
+
+
+def test_press_after_window_does_not_cancel(help_env):
+    help_mod, service, channel, clock, said = help_env
+    press_and_send(help_mod, service, clock)
+    clock.advance(1)
+    service.trigger()
+    service.step()
+    assert said[-1].startswith("Ich habe Sandra bereits informiert")
+    assert help_mod.list_alerts()[0]["status"] == "offen"
+
+
+def test_press_at_window_end_does_not_race_the_send(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(help_mod.CANCEL_SECONDS)
+    service.trigger()                                   # exactly at the end: too late
+    service.step()
+    assert len(channel.sent) == 1
+    assert help_mod.list_alerts()[0]["status"] == "offen"
+
+
+def test_after_a_cancel_next_press_goes_out_at_once(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(3)
+    service.trigger()
+    service.step()                                      # cancelled
+    clock.advance(4)
+    service.trigger()                                   # needs help after all
+    service.step()
+    assert said[-1] == "Ich informiere jetzt Sandra. Im Notfall rufen Sie bitte 144 an."
+    assert [s[0] for s in channel.sent] == ["chat-sandra"]
+    clock.advance(3)
+    service.trigger()                                   # cannot be cancelled now
+    service.step()
+    assert said[-1].startswith("Ich habe Sandra bereits informiert")
+    assert [a["status"] for a in help_mod.list_alerts()] == ["abgebrochen", "offen"]
+
+
+def test_cancel_window_returns_two_minutes_after_a_cancel(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(3)
+    service.trigger()
+    service.step()
+    clock.advance(help_mod.NO_CANCEL_AFTER_CANCEL_SECONDS)
+    service.trigger()
+    service.step()
+    assert said[-1] == help_mod.SAY_HOLD.format(name="Sandra")
+    assert channel.sent == []
+
+
+def test_cancelled_alert_never_comes_back_after_restart(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(3)
+    service.trigger()
+    service.step()
+    restarted = help_mod.HelpService(channel, announce=said.append,
+                                     now=lambda: clock.wall, monotonic=lambda: clock.mono)
+    count = len(said)
+    restarted.step()
+    assert len(said) == count                           # no 144, nothing sent
+    assert channel.sent == [] and help_mod.list_alerts()[0]["status"] == "abgebrochen"
+
+
+def test_restart_during_wait_says_144(help_env):
+    """Not sent yet when the device restarts: be safe and say 144 (A14)."""
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    restarted = help_mod.HelpService(channel, announce=said.append,
+                                     now=lambda: clock.wall, monotonic=lambda: clock.mono)
+    clock.advance(30)
+    restarted.step()
+    assert said[-1] == help_mod.SAY_CALL_144
+    assert help_mod.list_alerts()[0]["status"] == "niemand erreicht"
+
+
+def test_no_acknowledgement_possible_while_waiting(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    service.simulate_ack()                              # sim button: nothing was sent yet
+    clock.advance(help_mod.CANCEL_SECONDS)
+    service.step()
+    assert help_mod.list_alerts()[0]["status"] == "offen"
+
+
+def test_screen_and_phone_show_the_phases(help_env):
+    help_mod, service, channel, clock, said = help_env
+    assert service.phase() is None
+    service.trigger()
+    assert service.phase() == "wartet"
+    service.step()
+    clock.advance(3)
+    status = service.screen_status()
+    assert status["phase"] == "wartet" and status["rest"] == 7 and status["kontakt"] == "Sandra"
+    service.trigger()
+    service.step()
+    assert service.phase() == "abgebrochen" and not service.is_open()
+    clock.advance(help_mod.CANCELLED_SHOWN_SECONDS)
+    assert service.phase() is None
+    clock.advance(help_mod.NO_CANCEL_AFTER_CANCEL_SECONDS)
+    press_and_send(help_mod, service, clock)
+    assert service.phase() == "unterwegs"
+
+
+def test_worker_sends_on_time_without_a_further_press(env):
+    """Real worker thread: the notice goes out about CANCEL_SECONDS after the press."""
+    import time
+    help_mod = env.load("help_alert")
+    channels = __import__("channels")
+    help_mod.set_contacts([{"name": "Sandra", "role": "Tochter", "address": "x"}])
+    channel = channels.ConsoleChannel()
+    service = help_mod.HelpService(channel, announce=lambda t: None)
+    original = help_mod.CANCEL_SECONDS
+    help_mod.CANCEL_SECONDS = 0.3
+    try:
+        service.run_worker(interval=5.0)
+        service.trigger()
+        deadline = time.monotonic() + 3
+        while not channel.sent and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert channel.sent                              # did not wait for the 5 s interval
+    finally:
+        help_mod.CANCEL_SECONDS = original
+        service.stop()

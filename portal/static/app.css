@@ -157,6 +157,7 @@ input[type=password],input[type=number],input[type=datetime-local]{border:2px so
 .st-offen{background:var(--bad-soft);color:var(--bad)}
 .st-quittiert{background:var(--ok-soft);color:var(--ok)}
 .st-niemand{background:var(--bad-soft);color:var(--bad)}
+.st-abgebrochen{background:var(--plan-soft);color:var(--plan);border-color:#cfcdc5}
 .live{font-size:.88rem;color:var(--muted)}
 .empty{color:var(--muted);padding:.8rem 0}
 .kpi.ok{border-color:#a9d6b5;background:var(--ok-soft)}

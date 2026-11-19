@@ -74,6 +74,16 @@ def test_modes_and_reminder_text(env):
     assert got["modus"] == "hilfe" and got["hilfe"]["kontakt"] == "Sandra"
 
 
+def test_cancelled_help_is_shown_briefly(env):
+    phone = {"in_call": False, "help_open": False, "help_phase": "abgebrochen"}
+    _, s, state, _ = _screen(env, phone, help_status=lambda: {
+        "kontakt": "", "rolle": "", "zugestellt": False, "phase": "abgebrochen", "rest": 0})
+    got = s.state()
+    assert got["modus"] == "hilfe" and got["hilfe"]["phase"] == "abgebrochen"
+    state.update(help_phase=None)
+    assert s.state()["modus"] == "ruhe"
+
+
 def test_conversation_only_during_call_and_gone_after_hang_up(env):
     phone = {"in_call": True}
     _, s, state, _ = _screen(env, phone)

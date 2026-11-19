@@ -13,8 +13,16 @@ Decisions of 14.11.2026:
 - M7/M13: the message contains no conversation content; Help never goes
   through the LLM and runs in the core process.
 - Retention (proposal from 05/06, D9): Help events 30 days.
+- Cancel (T13, Husey 19.11.2026, accidental presses in tests): the notice waits
+  CANCEL_SECONDS before it is sent. A second press in that time cancels it,
+  so nobody was told and no all-clear is needed. Presses in the first
+  CANCEL_IGNORE_SECONDS do not cancel (panic presses), and right after a
+  cancel the next press is sent at once and cannot be cancelled. A cancelled
+  alert stays in the Help history as "abgebrochen" and never comes back after
+  a restart.
 """
 
+import math
 import sqlite3
 import threading
 import time
@@ -29,8 +37,16 @@ log = get_logger("help")
 ESCALATE_MINUTES = 10          # A14
 DELIVERY_GRACE_SECONDS = 60    # confirmed 14.11.: no delivery within 60 s -> say 144
 ALERT_RETENTION_DAYS = 30      # D9 proposal
+CANCEL_SECONDS = 10            # second press within this time cancels (before sending)
+CANCEL_IGNORE_SECONDS = 2      # presses this soon after the first never cancel
+NO_CANCEL_AFTER_CANCEL_SECONDS = 120   # after a cancel, the next press goes out at once
+CANCELLED_SHOWN_SECONDS = 10   # screen shows "abgebrochen" this long
 
 SAY_STARTED = "Ich informiere jetzt {name}. Im Notfall rufen Sie bitte 144 an."
+SAY_HOLD = "Ich informiere gleich {name}. Falls das ein Versehen war, drücken Sie nochmals Hilfe."
+SAY_SENT = "Ich habe {name} informiert. Im Notfall rufen Sie bitte 144 an."
+SAY_CANCELLED = ("Abgebrochen. Es wird niemand informiert. "
+                 "Wenn Sie doch Hilfe brauchen, drücken Sie nochmals Hilfe.")
 SAY_ALREADY = "Ich habe {name} bereits informiert. Im Notfall rufen Sie bitte 144 an."
 SAY_ACK = "{name} hat geantwortet und kümmert sich um Sie."
 SAY_NEXT = "{prev} hat noch nicht geantwortet. Ich informiere jetzt {name}."
@@ -59,7 +75,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 """
 
 # Alert status values (portal shows them, PR 10)
-OFFEN, QUITTIERT, NIEMAND = "offen", "quittiert", "niemand erreicht"
+OFFEN, QUITTIERT, NIEMAND, ABGEBROCHEN = "offen", "quittiert", "niemand erreicht", "abgebrochen"
 
 
 def _conn() -> sqlite3.Connection:
@@ -127,9 +143,14 @@ class HelpService:
         self.monotonic = monotonic
         # Re-entrant: helpers close an alert while holding the lock
         self._lock = threading.RLock()
-        # {id, contacts, pos, notified_mono, delivered, started_mono, pending_send}
+        # {id, contacts, pos, notified_mono, delivered, started_mono, pending_send,
+        #  pressed_mono, held, send_after}
         self._active: dict | None = None
         self._requested = False
+        self._request_mono = 0.0          # when the pending request was pressed
+        self._request_cancellable = True
+        self._cancel_requested = False
+        self._last_cancel_mono: float | None = None
         self._recovered = False
         self._wake = threading.Event()
         self._stop = threading.Event()
@@ -138,14 +159,40 @@ class HelpService:
     # --- called from the core loop (must not block) ---
 
     def trigger(self) -> None:
+        now = self.monotonic()
+        say = None
         with self._lock:
             active = self._active
-            if active is None:
+            if active is None and not self._requested:
                 self._requested = True
+                self._request_mono = now
+                self._request_cancellable = (
+                    self._last_cancel_mono is None
+                    or now - self._last_cancel_mono >= NO_CANCEL_AFTER_CANCEL_SECONDS)
+            elif self._can_cancel(now):
+                self._cancel_requested = True
+            elif active is not None and not active["held"]:
+                say = SAY_ALREADY.format(name=active["contacts"][active["pos"]]["name"])
+            # otherwise: a press right after the first one (or while the
+            # notice waits, after a cancel was already asked) is ignored
         self._wake.set()
+        if say:
+            self.announce(say)
+
+    def _can_cancel(self, now: float) -> bool:
+        """Second press counts as cancel (call with the lock held)."""
+        if self._cancel_requested:
+            return False
+        active = self._active
         if active is not None:
-            name = active["contacts"][active["pos"]]["name"]
-            self.announce(SAY_ALREADY.format(name=name))
+            if not active["held"]:
+                return False            # sending has begun: too late
+            pressed = active["pressed_mono"]
+        elif self._requested and self._request_cancellable:
+            pressed = self._request_mono
+        else:
+            return False
+        return CANCEL_IGNORE_SECONDS <= now - pressed < CANCEL_SECONDS
 
     # --- worker: starts alerts, sends, polls acknowledgements, escalates ---
 
@@ -155,8 +202,19 @@ class HelpService:
             self._recover_open_alerts()
         with self._lock:
             requested, self._requested = self._requested, False
+            pressed, cancellable = self._request_mono, self._request_cancellable
         if requested:
-            self._start()
+            self._start(pressed, cancellable)
+        with self._lock:
+            cancel, self._cancel_requested = self._cancel_requested, False
+            held = self._active if self._active and self._active["held"] else None
+            held_id = held["id"] if held else None
+            # The wait ends under the lock: from then on a press can no longer
+            # cancel, so trigger() and the send cannot race
+            if held and not cancel and self.monotonic() >= held["send_after"]:
+                held["held"] = False
+        if cancel and held_id is not None:
+            self._cancel(held_id)
         if self.monotonic() - self._last_purge > 3600:
             self._last_purge = self.monotonic()
             purge_expired(self.now())
@@ -166,8 +224,20 @@ class HelpService:
             self._poll_acks(None)
             return
         contacts = active["contacts"]
+        if active["held"]:
+            return                      # waiting: a second press may still cancel
         if active["pending_send"]:
+            first = active["pos"] == 0 and not active["delivered"]
             self._send(active)
+            with self._lock:
+                sent_now = (first and self._active is not None
+                            and self._active["id"] == active["id"]
+                            and self._active["delivered"] and self._active["announce_sent"])
+                if sent_now:
+                    self._active["announce_sent"] = False
+            if sent_now:
+                # After the wait, say that the notice is out now (A13)
+                self.announce(SAY_SENT.format(name=contacts[0]["name"]))
             with self._lock:
                 active = dict(self._active) if self._active else None
             if active is None:
@@ -190,8 +260,12 @@ class HelpService:
             else:
                 self._give_up(active)
 
-    def _start(self) -> None:
-        """Create the alert. If that fails, still tell the senior to call 144."""
+    def _start(self, pressed_mono: float, cancellable: bool) -> None:
+        """Create the alert. If that fails, still tell the senior to call 144.
+
+        cancellable: the notice waits until CANCEL_SECONDS after the press, so
+        a second press can still cancel it. False right after a cancel.
+        """
         try:
             contacts = get_contacts()
             now = self.now()
@@ -214,11 +288,24 @@ class HelpService:
             self._close(alert_id, NIEMAND)
             self.announce(SAY_NO_CONTACTS)
             return
+        send_after = pressed_mono + CANCEL_SECONDS if cancellable else self.monotonic()
         with self._lock:
+            # The delivery deadline (DELIVERY_GRACE_SECONDS) starts when sending may begin
             self._active = {"id": alert_id, "contacts": contacts, "pos": 0,
                             "notified_mono": None, "delivered": False,
-                            "started_mono": self.monotonic(), "pending_send": True}
-        self.announce(SAY_STARTED.format(name=contacts[0]["name"]))
+                            "started_mono": max(send_after, self.monotonic()),
+                            "pending_send": True, "pressed_mono": pressed_mono,
+                            "held": cancellable, "send_after": send_after,
+                            "announce_sent": cancellable}
+        name = contacts[0]["name"]
+        self.announce((SAY_HOLD if cancellable else SAY_STARTED).format(name=name))
+
+    def _cancel(self, alert_id: int) -> None:
+        """Second press while the notice waits: nobody has been told."""
+        with self._lock:
+            self._last_cancel_mono = self.monotonic()
+        self._close(alert_id, ABGEBROCHEN)
+        self.announce(SAY_CANCELLED)
 
     def _recover_open_alerts(self) -> None:
         """After a restart, an alert left 'offen' cannot be followed any more.
@@ -318,36 +405,71 @@ class HelpService:
                     self.step()
                 except Exception as e:
                     log.error("Help worker error: %s", type(e).__name__)
-                self._wake.wait(interval)   # a Help press wakes the worker at once
+                # A Help press wakes the worker at once; while the notice
+                # waits, wake exactly when it is due
+                self._wake.wait(self._wait_time(interval))
                 self._wake.clear()
         thread = threading.Thread(target=loop, name="help", daemon=True)
         thread.start()
         return thread
+
+    def _wait_time(self, interval: float) -> float:
+        with self._lock:
+            active = self._active
+            if active is None or not active["held"]:
+                return interval
+            due = active["send_after"] - self.monotonic()
+        return min(interval, max(0.05, due))
 
     def stop(self) -> None:
         self._stop.set()
         self._wake.set()
 
     def screen_status(self) -> dict | None:
-        """Who was told, for the device screen (A13). None if no alert runs."""
+        """Who is told, for the device screen (A13). None if nothing to show.
+
+        phase: "wartet" (a second press still cancels, rest = seconds left),
+        "unterwegs" (sending or sent) or "abgebrochen" (cancelled just now).
+        """
+        now = self.monotonic()
         with self._lock:
             active = self._active
             if active is None:
-                return {"kontakt": "", "rolle": "", "zugestellt": False} if self._requested else None
+                if self._requested:
+                    return {"kontakt": "", "rolle": "", "zugestellt": False,
+                            "phase": "wartet" if self._request_cancellable else "unterwegs",
+                            "rest": CANCEL_SECONDS}
+                if self._recently_cancelled(now):
+                    return {"kontakt": "", "rolle": "", "zugestellt": False,
+                            "phase": "abgebrochen", "rest": 0}
+                return None
             contact = active["contacts"][active["pos"]]
+            held = bool(active["held"])
+            rest = max(0, math.ceil(active["send_after"] - now)) if held else 0
             return {"kontakt": contact.get("name", ""), "rolle": contact.get("role", ""),
-                    "zugestellt": bool(active.get("delivered"))}
+                    "zugestellt": bool(active.get("delivered")),
+                    "phase": "wartet" if held else "unterwegs", "rest": rest}
+
+    def _recently_cancelled(self, now: float) -> bool:
+        return (self._last_cancel_mono is not None
+                and now - self._last_cancel_mono < CANCELLED_SHOWN_SECONDS)
 
     def is_open(self) -> bool:
         """An alert is running (shown on the simulated phone page)."""
         with self._lock:
             return self._active is not None or self._requested
 
+    def phase(self) -> str | None:
+        """For the simulated phone page: None, "wartet", "unterwegs", "abgebrochen"."""
+        status = self.screen_status()
+        return status["phase"] if status else None
+
     def simulate_ack(self) -> None:
         """Keyboard simulation: current contact presses "Ich kümmere mich"."""
         with self._lock:
             active = dict(self._active) if self._active else None
-        if active and hasattr(self.channel, "simulate_ack"):
+        # Nothing has been sent while the notice waits: nobody can answer yet
+        if active and not active["held"] and hasattr(self.channel, "simulate_ack"):
             self.channel.simulate_ack(active["id"], active["contacts"][active["pos"]]["address"])
         self._wake.set()
 
