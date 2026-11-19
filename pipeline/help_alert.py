@@ -51,6 +51,7 @@ SAY_SENT = "Ich habe {name} informiert. Im Notfall rufen Sie bitte 144 an."
 SAY_CANCELLED = ("Abgebrochen. Es wird niemand informiert. "
                  "Wenn Sie doch Hilfe brauchen, drücken Sie nochmals Hilfe.")
 SAY_ALREADY = "Ich habe {name} bereits informiert. Im Notfall rufen Sie bitte 144 an."
+SAY_SENDING = "Die Meldung an {name} wird gerade verschickt. Im Notfall rufen Sie bitte 144 an."
 SAY_ACK = "{name} hat geantwortet und kümmert sich um Sie."
 SAY_NEXT = "{prev} hat noch nicht geantwortet. Ich informiere jetzt {name}."
 SAY_CALL_144 = "Ich konnte niemanden erreichen. Bitte rufen Sie 144 an."
@@ -155,6 +156,7 @@ class HelpService:
         self._cancel_requested = False
         self._last_cancel_mono: float | None = None
         self._last_press_mono: float | None = None
+        self._cancel_press_mono: float | None = None
         self._recovered = False
         self._wake = threading.Event()
         self._stop = threading.Event()
@@ -168,21 +170,27 @@ class HelpService:
         with self._lock:
             gap = None if self._last_press_mono is None else now - self._last_press_mono
             self._last_press_mono = now
+            quick = gap is not None and gap < CANCEL_IGNORE_SECONDS
             active = self._active
-            if gap is not None and gap < CANCEL_IGNORE_SECONDS:
-                return      # repeated pressing (panic, bounce): never cancels, never toggles
             if active is None and not self._requested:
+                # A new request, except as the double tap of a cancel press
+                if (self._cancel_press_mono is not None
+                        and now - self._cancel_press_mono < CANCEL_IGNORE_SECONDS):
+                    return
                 self._requested = True
                 self._request_mono = now
                 self._request_cancellable = (
                     self._last_cancel_mono is None
                     or now - self._last_cancel_mono >= NO_CANCEL_AFTER_CANCEL_SECONDS)
+            elif quick:
+                return      # repeated pressing (panic, bounce) never cancels
             elif self._can_cancel(now):
                 self._cancel_requested = True
+                self._cancel_press_mono = now
             elif active is not None and not active["held"]:
-                say = SAY_ALREADY.format(name=active["contacts"][active["pos"]]["name"])
-            # otherwise (the window has passed but sending has not begun yet,
-            # or a cancel is already asked): ignored
+                template = SAY_ALREADY if active["delivered"] else SAY_SENDING
+                say = template.format(name=active["contacts"][active["pos"]]["name"])
+            # otherwise a cancel is already asked: ignored
         self._wake.set()
         if say:
             self.announce(say)
@@ -192,15 +200,15 @@ class HelpService:
 
         _requested stays set until _start() has set _active, so a press while
         the alert is being created is also a cancel, never a second alert.
+        Before the worker has taken the request nothing can have been sent,
+        so any (not too quick) press then cancels, however late the worker is.
         """
         if self._cancel_requested:
             return False
         active = self._active
         if active is not None:
             return bool(active["held"]) and now < active["send_after"]
-        if self._requested and self._request_cancellable:
-            return now < self._request_mono + CANCEL_SECONDS
-        return False
+        return self._requested and self._request_cancellable
 
     # --- worker: starts alerts, sends, polls acknowledgements, escalates ---
 
@@ -311,22 +319,38 @@ class HelpService:
         # to cancel after hearing the announcement
         send_after = (max(pressed_mono + CANCEL_SECONDS, now_m + CANCEL_MIN_WINDOW_SECONDS)
                       if cancellable else now_m)
+        # One lock block: no press can fall between "request taken" and
+        # "alert active" (it would start a second alert)
         with self._lock:
             self._requested = False
-            # The delivery deadline (DELIVERY_GRACE_SECONDS) starts when sending may begin
-            self._active = {"id": alert_id, "contacts": contacts, "pos": 0,
-                            "notified_mono": None, "delivered": False,
-                            "started_mono": max(send_after, self.monotonic()),
-                            "pending_send": True, "pressed_mono": pressed_mono,
-                            "held": cancellable, "send_after": send_after,
-                            "announce_sent": cancellable}
+            cancelled = self._cancel_requested
+            if cancelled:
+                # Cancelled before the worker got here: no "drücken Sie
+                # nochmals" prompt, straight to the cancel
+                self._cancel_requested = False
+                self._last_cancel_mono = now_m
+            else:
+                # The delivery deadline (DELIVERY_GRACE_SECONDS) starts when sending may begin
+                self._active = {"id": alert_id, "contacts": contacts, "pos": 0,
+                                "notified_mono": None, "delivered": False,
+                                "started_mono": max(send_after, now_m),
+                                "pending_send": True, "pressed_mono": pressed_mono,
+                                "held": cancellable, "send_after": send_after,
+                                "announce_sent": cancellable}
+        if cancelled:
+            self._cancel(alert_id)
+            return
         name = contacts[0]["name"]
         self.announce((SAY_HOLD if cancellable else SAY_STARTED).format(name=name))
 
     def _cancel(self, alert_id: int) -> None:
         """Second press while the notice waits: nobody has been told."""
-        self._close(alert_id, ABGEBROCHEN)
-        self.announce(SAY_CANCELLED)
+        self.announce(SAY_CANCELLED)        # first: the senior must hear it
+        try:
+            self._close(alert_id, ABGEBROCHEN)
+        except Exception as e:
+            # Row stays "offen": after a restart the device says 144 (safe side)
+            log.error("Cancelled Help alert %d not stored: %s", alert_id, type(e).__name__)
 
     def _recover_open_alerts(self) -> None:
         """After a restart, an alert left 'offen' cannot be followed any more.

@@ -291,7 +291,7 @@ async function renderHilfe(refresh) {
     data.alerts.length ? el("div", { class: "tbl-wrap" }, el("table", {},
       el("thead", {}, el("tr", {}, el("th", {}, "Wann"), el("th", {}, "Status"), el("th", {}, "Meldung"), el("th", {}, "Gekümmert hat sich"))),
       el("tbody", {}, rows))) : el("p", { class: "empty" }, "Keine Hilfe-Meldungen."),
-    el("p", { class: "small muted" }, "«abgebrochen»: Am Gerät wurde innert 10 Sekunden nochmals «Hilfe» gedrückt. Die Meldung wurde nicht verschickt."),
+    el("p", { class: "small muted" }, "«abgebrochen»: Am Gerät wurde kurz nach dem ersten Druck nochmals «Hilfe» gedrückt. Die Meldung wurde nicht verschickt."),
     el("p", { class: "privacy" }, "Der Hilfe-Knopf meldet sich direkt bei der Kontaktperson. Das Portal ist kein Notruf und zeigt nur den Verlauf.")));
 }
 

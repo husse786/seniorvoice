@@ -502,3 +502,61 @@ def test_countdown_while_request_waits_for_worker(help_env):
     service.trigger()
     clock.advance(4)
     assert service.screen_status()["rest"] == 6
+
+
+def test_cancel_before_worker_starts_gives_no_press_again_prompt(help_env):
+    """Second review: worker late (mail poll), cancel pressed before it starts."""
+    help_mod, service, channel, clock, said = help_env
+    service.step()                                      # startup done
+    service.trigger()
+    clock.advance(11)                                   # later than 10 s: still nothing sent
+    service.trigger()
+    clock.advance(1)
+    service.step()                                      # worker finally runs
+    assert said == [help_mod.SAY_CANCELLED]             # no "drücken Sie nochmals Hilfe"
+    clock.advance(30)
+    service.step()
+    assert channel.sent == []
+    assert [a["status"] for a in help_mod.list_alerts()] == ["abgebrochen"]
+
+
+def test_panic_pressing_after_cancel_still_gets_help(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(3)
+    service.trigger()
+    service.step()                                      # cancelled
+    for _ in range(4):                                  # then presses every second
+        clock.advance(1)
+        service.trigger()
+        service.step()
+    assert [s[0] for s in channel.sent] == ["chat-sandra"]
+    assert [a["status"] for a in help_mod.list_alerts()] == ["abgebrochen", "offen"]
+
+
+def test_press_while_sending_does_not_claim_delivery(help_env, monkeypatch):
+    help_mod, service, channel, clock, said = help_env
+
+    def failing(*a):
+        raise OSError("smtp timeout")
+    monkeypatch.setattr(channel, "send_alert", failing)
+    press_and_send(help_mod, service, clock)            # wait over, sending fails
+    clock.advance(3)
+    service.trigger()
+    assert said[-1] == help_mod.SAY_SENDING.format(name="Sandra")
+
+
+def test_cancel_is_announced_even_if_the_database_fails(help_env, monkeypatch):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(3)
+    service.trigger()
+
+    def locked():
+        raise help_mod.sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(help_mod, "_conn", locked)
+    service.step()
+    assert said[-1] == help_mod.SAY_CANCELLED
+    assert channel.sent == [] and not service.is_open()
