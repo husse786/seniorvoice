@@ -50,6 +50,18 @@ sudo systemctl enable --now seniorvoice-api seniorvoice
 journalctl -u seniorvoice -f       # Ctrl+C beendet nur die Anzeige
 ```
 
+## 3a. Bildschirm (7"-Display, T11)
+
+Das Gerät zeigt auf `http://127.0.0.1:8772` dieselbe Bildschirm-Seite wie das gezeichnete Telefon in der Simulation: Uhr, Termine von heute, Erinnerung beim Klingeln, das laufende Gespräch und den Hilfe-Status. Die Seite ist nur auf dem Pi selbst erreichbar und nur zum Anschauen, ohne Bedienung.
+
+Der Browser des Pi zeigt sie nach dem Anmelden im Vollbild. In `~/.config/labwc/autostart` (Raspberry Pi OS mit Desktop, labwc):
+```
+chromium-browser --kiosk --noerrdialogs --disable-infobars --incognito http://127.0.0.1:8772/ &
+```
+(Heisst das Programm auf dem Pi `chromium`, den Namen anpassen.) Ohne Bildschirm: `SCREEN_ENABLED=false` in `.env`.
+
+Noch nicht auf dem Pi geprüft. Datenschutz: Während eines Gesprächs stehen die letzten Sätze auf dem Bildschirm. Wer daneben sitzt, kann mitlesen. Beim Auflegen sind sie weg.
+
 ## 4. Portal auf dem Mac
 
 ```bash

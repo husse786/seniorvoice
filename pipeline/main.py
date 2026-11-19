@@ -153,13 +153,19 @@ def run_pipeline(
         log.info("Listening...")
         from audio_capture import record_until_silence
         from stt import transcribe
-        wav_bytes = record_until_silence()
-
-        # Step 3: Transcribe
-        log.info("Transcribing...")
-        t_stt = time.perf_counter()
-        text = transcribe(wav_bytes)
-        stt_ms = int((time.perf_counter() - t_stt) * 1000)
+        # A sentence typed on the simulated phone page replaces speaking
+        text = sim_text.take_input()
+        stt_ms = 0
+        if not text:
+            wav_bytes = record_until_silence()
+            text = sim_text.take_input()
+        if not text:
+            # Step 3: Transcribe
+            log.info("Transcribing...")
+            t_stt = time.perf_counter()
+            text = transcribe(wav_bytes)
+            stt_ms = int((time.perf_counter() - t_stt) * 1000)
+            sim_text.heard(text)          # shown on the screen (RAM only)
 
     run_pipeline.last_text = text
     if not still_active():

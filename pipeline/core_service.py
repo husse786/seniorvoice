@@ -16,6 +16,7 @@ import argparse
 import itertools
 import json
 import os
+import shutil
 import queue
 import signal
 import socket
@@ -64,6 +65,7 @@ class DialogSupervisor:
         self.on_ready: Callable[[], None] = lambda: None
         # Text mode of the simulation: sentences of the dialog for the phone page
         self.on_sim_say: Callable[[str, str], None] = lambda text, output: None
+        self.on_sim_heard: Callable[[str], None] = lambda text: None
         self.last_restart = ""          # "exited", "llm_hang" or "no_heartbeat"
         self.clock = clock
         self.proc: subprocess.Popen | None = None
@@ -144,6 +146,8 @@ class DialogSupervisor:
             self.on_ready()
         elif kind == "sim_say" and isinstance(msg.get("text"), str):
             self.on_sim_say(msg["text"], str(msg.get("output", "handset")))
+        elif kind == "sim_heard" and isinstance(msg.get("text"), str):
+            self.on_sim_heard(msg["text"])
 
     def health_state(self) -> str:
         """Dialog state for the health view. Deliberately coarse: whether a
@@ -215,6 +219,7 @@ class Core:
         self.call_delivered = False
         self.announcing = False
         self.opened_with = ""        # reminder spoken at pickup (RAM only)
+        self.screen = None           # screen.Screen when a display is used
         self._call_lock = threading.Lock()
         self.tickers: list[Callable[[], None]] = [supervisor.check]
         self.running = True
@@ -292,13 +297,17 @@ class Core:
                 self._start_call_if_pending()
         elif event.kind == "hook_on":
             self.in_call = False
+            if self.screen is not None:
+                self.screen.forget()          # conversation off the screen (A8)
             with self._call_lock:
                 self.call_delivered = False
             self.supervisor.send("call_end")
         elif event.kind == "sim_text":
-            # Text mode of the simulation: typed sentence to the dialog (RAM only)
+            # Typed on the simulated phone page: to the dialog (RAM only)
             if self.in_call:
                 self.supervisor.send("sim_text", text=event.name)
+                if self.screen is not None:
+                    self.screen.heard(event.name)
         elif event.kind == "sim_ack" and hasattr(self.help, "simulate_ack"):
             self.help.simulate_ack()
         elif event.kind == "button" and event.name == "hilfe":
@@ -433,6 +442,47 @@ def _speak(text: str, output: str = "speaker") -> None:
     speak(text, output=output)
 
 
+def _set_env(name: str, value: str) -> None:
+    """For this process (config) and the dialog process it starts (env)."""
+    import config
+    os.environ[name] = value
+    setattr(config, name, value)
+
+
+def resolve_sim_audio(requested: str) -> tuple[str, str]:
+    """Sound or text for the simulation, decided at start without settings.
+
+    Returns (mode, note for the phone page). A configured microphone that is
+    not there (e.g. the Pi's C920 on a Mac) falls back to the default one.
+    """
+    import importlib.util
+    import config
+    if requested == "text":
+        return "text", "Nur Tippen (SIM_AUDIO=text)."
+    missing = []
+    if shutil.which("piper") is None or not Path(config.PIPER_VOICE).is_file():
+        missing.append("Sprachausgabe Piper (Programm oder Stimme)")
+    if importlib.util.find_spec("faster_whisper") is None:
+        missing.append("Spracherkennung Whisper")
+    note = ""
+    try:
+        import sounddevice as sd
+        mics = [d["name"] for d in sd.query_devices() if d["max_input_channels"] > 0]
+        if not mics:
+            missing.append("Mikrofon")
+        elif config.AUDIO_DEVICE_NAME.strip() and not any(
+                config.AUDIO_DEVICE_NAME.lower() in m.lower() for m in mics):
+            note = (f"Mikrofon «{config.AUDIO_DEVICE_NAME}» nicht gefunden, "
+                    "das Standard-Mikrofon wird benutzt.")
+            _set_env("AUDIO_DEVICE_NAME", "")
+    except Exception as e:
+        missing.append(f"Mikrofon ({type(e).__name__})")
+    if missing:
+        log.warning("Simulation without sound, missing: %s", ", ".join(missing))
+        return "text", "Ton aus, es fehlt: " + ", ".join(missing) + ". Tippen geht."
+    return "audio", note
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="SeniorVoice core process")
     parser.add_argument("--input", choices=["web", "keyboard", "gpio"], default=None,
@@ -459,6 +509,13 @@ def main() -> None:
     import sim_text
     from memory import PurgeService
     PurgeService(interval=config.MEMORY_PURGE_INTERVAL).start()
+    audio_note = ""
+    if args.input == "web":
+        # Simulation: sound when it works, otherwise text; typing always works
+        mode, audio_note = resolve_sim_audio(config.SIM_AUDIO)
+        _set_env("SIM_AUDIO", mode)
+    elif config.SIM_AUDIO == "auto":
+        _set_env("SIM_AUDIO", "audio")
     text_mode = sim_text.enabled()
     if text_mode and args.input == "gpio":
         log.critical("SIM_AUDIO=text is for the simulation only, not with --input gpio")
@@ -471,10 +528,8 @@ def main() -> None:
     if args.input == "web":
         from sim_phone import SimPhone
         phone = SimPhone(config.SIM_PHONE_PORT, text_mode=text_mode,
-                         host=config.SIM_PHONE_HOST)
+                         host=config.SIM_PHONE_HOST, audio_note=audio_note)
         channel = _ShowOnPhone(channel, phone)
-        if text_mode:
-            sim_text.set_sink(phone.show)
     # Real ring tone whenever there is a speaker (also on the simulated phone)
     ringer = SimulatedRinger() if text_mode or args.input == "keyboard" else AudioRinger()
     # Help speaks through a queue: the core loop never waits for audio
@@ -494,8 +549,39 @@ def main() -> None:
         metrics.log_event("core_start")
     except Exception as e:
         log.error("Metrics event failed: %s", type(e).__name__)
+    # Screen (T11): conversation as text, appointments, reminder, Help status
+    screen = None
+    if config.SCREEN_ENABLED or phone is not None:
+        from screen import Screen, ScreenServer
+        screen = Screen(core.phone_state,
+                        ringing_text=lambda: (core.reminders.ringing.text
+                                              if core.reminders and core.reminders.ringing else None),
+                        help_status=help_service.screen_status)
+        core.screen = screen
+        if config.SCREEN_ENABLED:
+            try:
+                ScreenServer(screen, config.SCREEN_PORT).start()
+            except OSError as e:
+                log.error("Screen page not started: %s", e)   # the phone works without it
+
+    def display(text: str, output: str = "handset") -> None:
+        if phone is not None:
+            phone.show(text, output)
+        if screen is not None:
+            screen.show(text, output)
+
+    def display_heard(text: str) -> None:
+        if phone is not None:
+            phone.heard(text)
+        if screen is not None:
+            screen.heard(text)
+    # What is said, as text (RAM only): from the core's own announcements and,
+    # over the bus, from the dialog process
+    sim_text.set_sink(display)
+    core.supervisor.on_sim_say = display
+    core.supervisor.on_sim_heard = display_heard
     if phone is not None:
-        core.supervisor.on_sim_say = phone.show
+        phone.screen = screen
         phone._state = core.phone_state
         try:
             phone.start(core.events)
