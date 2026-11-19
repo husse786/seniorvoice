@@ -44,6 +44,8 @@ Dieser Fork wird im HS26 weitergebaut (ZHAW WI-Projekt). Seit PR 1 und PR 2 gilt
 
 **Geräte-Schnittstelle für das Portal (ab PR 10, B4, B5, A16–A18):** eigener Dienst `device_api.py` (nur Standardbibliothek, hört nur auf der Tunnel-Adresse, startet nicht ohne Gerätetoken). Liefert dem Portal live Termine, Erinnerungsstatus und Help-Verlauf; nie Gesprächsinhalte. Freigaben und Zugriffsprotokoll liegen auf dem Gerät (`device_api_cli.py`). Einrichtung und Anfragen: [docs/geraete-api.md](docs/geraete-api.md).
 
+**Gerät neu aufsetzen (HS26):** Schritt für Schritt in [docs/setup-schnellstart.md](docs/setup-schnellstart.md).
+
 Alle Einstellungen: [`.env.example`](.env.example). Tests: `pip install -r requirements-dev.txt && pytest`.
 
 ---
@@ -200,7 +202,7 @@ Vollständige Ergebnisse: [model_comparisson.md](docs/models/model_comparisson.m
 
 ### Hinweis zur Reproduzierbarkeit
 
-Der Prototyp läuft vollständig headless auf dem Raspberry Pi 5 (NVMe-SSD-Boot, PulseAudio, Python 3.13 venv). Für einen Nachbau werden kein Bildschirm und keine Tastatur benötigt — SSH-Zugang genügt. Der PIR-Sensor (HC-SR501) ist über GPIO17 (Pin 11) angeschlossen; alternativ kann `--no-pir` als Startoption genutzt werden, um Keyboard-Triggering zu aktivieren.
+Der Prototyp läuft vollständig headless auf dem Raspberry Pi 5 (NVMe-SSD-Boot, PulseAudio, Python 3.13 venv). Für einen Nachbau werden kein Bildschirm und keine Tastatur benötigt — SSH-Zugang genügt. Der PIR-Sensor (HC-SR501) ist über GPIO4 (Pin 7) angeschlossen (Korrektur HS26: laut FS26-Log 006 und `config.py`, nicht GPIO17); alternativ kann `--no-pir` als Startoption genutzt werden, um Keyboard-Triggering zu aktivieren.
 
 ---
 
