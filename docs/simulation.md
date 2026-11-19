@@ -75,7 +75,7 @@ Dann `http://127.0.0.1:8771` im Browser öffnen. Beenden mit Ctrl+C.
 
 ## Demo-Ablauf (Z7: Termin im Portal kommt am Gerät an)
 
-1. Portal öffnen (PR B) und als Angehörige einen Termin in 2 Minuten eintragen.
+1. Portal öffnen (`docs/portal.md`) und als Angehörige einen Termin in 2 Minuten eintragen.
 2. Zur vollen Minute klingelt die Telefon-Seite («Es klingelt – bitte abheben»), im Ton-Modus auch hörbar.
 3. «Hörer abheben»: das Gerät sagt die Erinnerung an.
 4. Im Portal steht beim Termin jetzt «bestätigt».
