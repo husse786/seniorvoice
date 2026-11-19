@@ -45,8 +45,8 @@ def test_help_notifies_first_contact_and_confirms(help_env):
     help_mod, service, channel, clock, said = help_env
     service.trigger()
     # Said by the press itself (core thread: a queue, no DB, no network)
-    assert said == ["Ich informiere gleich Sandra. Falls das ein Versehen war, "
-                    "drücken Sie nochmals Hilfe."]
+    assert said == ["Ich informiere gleich Sandra. Im Notfall rufen Sie bitte 144 an. "
+                    "Falls das ein Versehen war, drücken Sie nochmals Hilfe."]
     service.step()
     assert len(said) == 1
     assert channel.sent == []                           # waits for a possible cancel
@@ -611,3 +611,29 @@ def test_cancel_is_announced_even_if_the_database_fails(help_env, monkeypatch):
     service.step()
     assert said[-1] == help_mod.SAY_CANCELLED
     assert channel.sent == [] and not service.is_open()
+
+
+def test_notice_names_the_time_of_the_press(help_env):
+    help_mod, service, channel, clock, said = help_env
+    clock.wall = clock.wall.replace(minute=59, second=55)     # 14:59:55 Swiss time
+    service.trigger()
+    service.step()
+    clock.advance(help_mod.CANCEL_SECONDS)                    # sent at 15:00:05
+    service.step()
+    assert "um 14:59 Uhr" in channel.sent[0][1]
+
+
+def test_confirmation_said_even_if_history_write_fails(help_env, monkeypatch):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(help_mod.CANCEL_SECONDS)
+    real = help_mod._conn
+
+    def locked_after_send():
+        if channel.sent:
+            raise help_mod.sqlite3.OperationalError("database is locked")
+        return real()
+    monkeypatch.setattr(help_mod, "_conn", locked_after_send)
+    service.step()
+    assert said[-1] == "Ich habe Sandra informiert. Im Notfall rufen Sie bitte 144 an."

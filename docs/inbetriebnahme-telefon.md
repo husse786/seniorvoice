@@ -184,7 +184,7 @@ python core_service.py --input gpio
 | 6b | «Rat», dann «Was hilft gegen Kopfweh?» | «Dazu ist bei mir nichts hinterlegt. Fragen Sie Ihre Spitex oder Ihre Ärztin.» |
 | 6c | «Rat», dann «Ich habe Schmerzen in der Brust» | «Wenn es ein Notfall ist, drücken Sie sofort den Hilfe-Knopf oder rufen Sie 144 an.» |
 | 6d | Im Gespräch (ohne Knopf): «Ich bin gestürzt» | zuerst derselbe Notfall-Satz, danach die Antwort des Modells |
-| 7 | «Hilfe» (Hörer egal) | Lautsprecher: «Ich informiere gleich Test Tochter. Falls das ein Versehen war …»; nach 10 s «Ich habe Test Tochter informiert …» und im Log `[console channel] alert` |
+| 7 | «Hilfe» (Hörer egal) | Lautsprecher: «Ich informiere gleich Test Tochter. Im Notfall … Falls das ein Versehen war …»; nach 10 s «Ich habe Test Tochter informiert …» und im Log `[console channel] alert` |
 | 7b | «Hilfe», nach etwa 5 s nochmals «Hilfe» | «Abgebrochen. Es wird niemand informiert …»; im Log kein `alert`, Status «abgebrochen» |
 | 8 | Testtermin erreicht | Klingeln im Raum; abheben → Ansage im Hörer |
 | 9 | Termin klingeln lassen | nach 10 min zweiter Versuch, danach «verpasst» (`appointments_cli.py list`) |

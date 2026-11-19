@@ -320,13 +320,14 @@ class Core:
 
     def phone_state(self) -> dict:
         """What the simulated phone page shows (this computer only)."""
-        is_open = getattr(self.help, "is_open", None)
         phase = getattr(self.help, "phase", None)
+        # One snapshot: open and phase must agree. "wartet" (second press
+        # cancels), "unterwegs", "abgebrochen" or None
+        help_phase = phase() if phase else None
         return {"in_call": self.in_call, "ringing": bool(getattr(self.ringer, "ringing", False)),
                 "announcing": self.announcing, "dialog": self.supervisor.health_state(),
-                "help_open": bool(is_open()) if is_open else False,
-                # "wartet" (second press cancels), "unterwegs", "abgebrochen" or None
-                "help_phase": phase() if phase else None}
+                "help_open": help_phase in ("wartet", "unterwegs"),
+                "help_phase": help_phase}
 
     def tick(self) -> None:
         for ticker in self.tickers:

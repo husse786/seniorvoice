@@ -77,7 +77,7 @@ Nur Tippen, zum Beispiel in einem lauten Raum: `SIM_AUDIO=text scripts/start-dem
 
 | Was | Verhalten |
 |---|---|
-| Erster Druck | Meldung wartet 10 Sekunden. Ansage: «Ich informiere gleich …, falls das ein Versehen war, drücken Sie nochmals Hilfe.» |
+| Erster Druck | Meldung wartet 10 Sekunden. Ansage: «Ich informiere gleich …. Im Notfall rufen Sie bitte 144 an. Falls das ein Versehen war, drücken Sie nochmals Hilfe.» |
 | Zweiter Druck innert 10 Sekunden, mindestens 2 Sekunden nach dem vorherigen Druck | Abbruch. Niemand wurde informiert, darum keine Entwarnung nötig. Status «abgebrochen» im Hilfe-Verlauf (30 Tage). |
 | Druck weniger als 2 Sekunden nach dem vorherigen Druck | bricht nie ab (Schutz vor Mehrfachdrücken in Panik). Direkt nach dem Abbruch-Druck startet er auch keinen neuen Ruf (kein Hin und Her) |
 | Gerät gerade beschäftigt (z. B. Mail-Abruf) | Die Ansage kommt trotzdem sofort beim Druck, die 10 Sekunden zählen ab dem Druck |

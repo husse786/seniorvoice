@@ -47,7 +47,8 @@ NO_CANCEL_AFTER_CANCEL_SECONDS = 120   # after a cancel, the next press goes out
 CANCELLED_SHOWN_SECONDS = 10   # screen shows "abgebrochen" this long
 
 SAY_STARTED = "Ich informiere jetzt {name}. Im Notfall rufen Sie bitte 144 an."
-SAY_HOLD = "Ich informiere gleich {name}. Falls das ein Versehen war, drücken Sie nochmals Hilfe."
+SAY_HOLD = ("Ich informiere gleich {name}. Im Notfall rufen Sie bitte 144 an. "
+            "Falls das ein Versehen war, drücken Sie nochmals Hilfe.")
 SOMEONE = "Ihre Kontaktperson"     # name not known yet (first press right after start)
 SAY_SENT = "Ich habe {name} informiert. Im Notfall rufen Sie bitte 144 an."
 SAY_CANCELLED = ("Abgebrochen. Es wird niemand informiert. "
@@ -259,6 +260,8 @@ class HelpService:
                 cancelled_id = held["id"]
                 self._active = None
                 self._cancelled_locked()
+            elif cancel and self._requested and self._active is None:
+                self._cancel_requested = True   # for the request not started yet: next step
             elif cancel:
                 self._cancelled_locked()        # nothing held any more: keep a later press
             elif held and self.monotonic() >= held["send_after"]:
@@ -364,7 +367,8 @@ class HelpService:
                                 "started_mono": max(send_after, now_m),
                                 "pending_send": True, "pressed_mono": pressed_mono,
                                 "held": cancellable, "send_after": send_after,
-                                "announce_sent": cancellable}
+                                "announce_sent": cancellable,
+                                "pressed_at": self.now() - timedelta(seconds=max(0.0, now_m - pressed_mono))}
             again = self._requested
             prompted = self._prompted
         if again:
@@ -378,9 +382,11 @@ class HelpService:
             return
         if not cancellable:
             self.announce(SAY_STARTED.format(name=contacts[0]["name"]))
-        elif not prompted:
+        elif not prompted and now_m < pressed_mono + CANCEL_SECONDS:
             # The press did not know a contact yet: say it now (window as is)
             self.announce(SAY_HOLD.format(name=contacts[0]["name"]))
+        elif not prompted:
+            self.announce(SAY_STARTED.format(name=contacts[0]["name"]))
 
     def _cancel(self, alert_id: int) -> None:
         """Second press while the notice waits: nobody has been told."""
@@ -425,8 +431,9 @@ class HelpService:
         if recent:
             self.announce(SAY_CALL_144)
 
-    def _message(self) -> str:
-        when = self.now().astimezone(LOCAL_TZ).strftime("%H:%M")
+    def _message(self, pressed_at: datetime | None = None) -> str:
+        # The time of the press, not of the send (the notice waits, retries)
+        when = (pressed_at or self.now()).astimezone(LOCAL_TZ).strftime("%H:%M")
         who = self.senior_name or "Ihr Angehöriger / Ihre Angehörige"
         # No conversation content (M7)
         return (f"SeniorVoice: {who} hat um {when} Uhr den Hilfe-Knopf gedrückt. "
@@ -435,7 +442,8 @@ class HelpService:
     def _send(self, active: dict) -> None:
         contact = active["contacts"][active["pos"]]
         try:
-            self.channel.send_alert(contact["address"], self._message(), active["id"])
+            self.channel.send_alert(contact["address"], self._message(active.get("pressed_at")),
+                                    active["id"])
         except Exception as e:
             log.error("Help delivery to position %d failed: %s", active["pos"], type(e).__name__)
             return  # retried on the next step
@@ -444,15 +452,19 @@ class HelpService:
                 return
             self._active.update(pending_send=False, delivered=True,
                                 notified_mono=self.monotonic())
-        conn = _conn()
         try:
-            conn.execute(
-                "UPDATE alerts SET contact_pos = ?, notified_at = ?, delivered = 1 WHERE id = ?",
-                (active["pos"], _iso(self.now()), active["id"]),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+            conn = _conn()
+            try:
+                conn.execute(
+                    "UPDATE alerts SET contact_pos = ?, notified_at = ?, delivered = 1 WHERE id = ?",
+                    (active["pos"], _iso(self.now()), active["id"]),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            # Sent is sent: the senior still hears it; only the history lags
+            log.error("Help delivery not stored: %s", type(e).__name__)
 
     def _poll_acks(self, active: dict | None) -> bool:
         """Returns True if the active alert was acknowledged."""
