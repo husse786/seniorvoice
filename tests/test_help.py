@@ -29,6 +29,7 @@ def help_env(env):
     said = []
     service = help_mod.HelpService(channel, announce=said.append, senior_name="Frau Keller",
                                    now=lambda: clock.wall, monotonic=lambda: clock.mono)
+    service.step()                                      # worker started: knows the first contact
     return help_mod, service, channel, clock, said
 
 
@@ -43,10 +44,11 @@ def press_and_send(help_mod, service, clock):
 def test_help_notifies_first_contact_and_confirms(help_env):
     help_mod, service, channel, clock, said = help_env
     service.trigger()
-    assert said == []                                   # core thread: no DB, no network
-    service.step()
+    # Said by the press itself (core thread: a queue, no DB, no network)
     assert said == ["Ich informiere gleich Sandra. Falls das ein Versehen war, "
                     "drücken Sie nochmals Hilfe."]
+    service.step()
+    assert len(said) == 1
     assert channel.sent == []                           # waits for a possible cancel
     clock.advance(9)
     service.step()
@@ -122,6 +124,8 @@ def test_second_press_does_not_spam(help_env):
 def test_no_contacts_says_144(help_env):
     help_mod, service, channel, clock, said = help_env
     help_mod.set_contacts([])
+    clock.advance(10)
+    service.step()                                      # name cache refreshed
     service.trigger()
     service.step()
     assert said == [help_mod.SAY_NO_CONTACTS]
@@ -187,7 +191,7 @@ def test_help_works_while_dialog_hangs_with_real_service(env, monkeypatch):
             if said:
                 break
             time.sleep(0.01)
-        assert said == [help_mod.SAY_HOLD.format(name="Sandra")]
+        assert said and said[0].startswith("Ich informiere gleich")
     finally:
         service.stop()
 
@@ -247,7 +251,7 @@ def test_database_failure_still_says_144(help_env, monkeypatch):
     monkeypatch.setattr(help_mod, "_conn", locked)
     service.trigger()
     service.step()
-    assert said == [help_mod.SAY_CALL_144]
+    assert said[-1] == help_mod.SAY_CALL_144
 
 
 # --- Cancel (Husey 19.11.2026): second press within 10 s, before sending ---
@@ -403,8 +407,8 @@ def test_worker_sends_on_time_without_a_further_press(env):
     help_mod.set_contacts([{"name": "Sandra", "role": "Tochter", "address": "x"}])
     channel = channels.ConsoleChannel()
     service = help_mod.HelpService(channel, announce=lambda t: None)
-    original = help_mod.CANCEL_SECONDS, help_mod.CANCEL_MIN_WINDOW_SECONDS
-    help_mod.CANCEL_SECONDS, help_mod.CANCEL_MIN_WINDOW_SECONDS = 0.3, 0.1
+    original = help_mod.CANCEL_SECONDS
+    help_mod.CANCEL_SECONDS = 0.3
     try:
         service.run_worker(interval=5.0)
         service.trigger()
@@ -413,7 +417,7 @@ def test_worker_sends_on_time_without_a_further_press(env):
             time.sleep(0.02)
         assert channel.sent                              # did not wait for the 5 s interval
     finally:
-        help_mod.CANCEL_SECONDS, help_mod.CANCEL_MIN_WINDOW_SECONDS = original
+        help_mod.CANCEL_SECONDS = original
         service.stop()
 
 
@@ -483,18 +487,17 @@ def test_quick_press_after_cancel_does_not_toggle(help_env):
     assert [s[0] for s in channel.sent] == ["chat-sandra"]
 
 
-def test_late_worker_still_leaves_time_to_cancel(help_env, monkeypatch):
-    """Worker busy (e.g. mail poll) for 11 s: the announcement still gives time."""
+def test_late_worker_sends_when_it_gets_there(help_env):
+    """Worker busy (e.g. mail poll) for 11 s: the prompt was heard at the press,
+    the 10 s are over, so it sends at once."""
     help_mod, service, channel, clock, said = help_env
-    service.step()                                      # startup done
     service.trigger()
-    clock.advance(11)                                   # worker picks it up late
+    clock.advance(11)
+    service.trigger()                                   # too late to cancel: told so
+    assert said[-1] == help_mod.SAY_SENDING.format(name="Sandra")
     service.step()
-    assert said[-1] == help_mod.SAY_HOLD.format(name="Sandra") and channel.sent == []
-    clock.advance(3)
-    service.trigger()
-    service.step()
-    assert said[-1] == help_mod.SAY_CANCELLED and channel.sent == []
+    assert [s[0] for s in channel.sent] == ["chat-sandra"]
+    assert said[-1] == "Ich habe Sandra informiert. Im Notfall rufen Sie bitte 144 an."
 
 
 def test_countdown_while_request_waits_for_worker(help_env):
@@ -504,20 +507,68 @@ def test_countdown_while_request_waits_for_worker(help_env):
     assert service.screen_status()["rest"] == 6
 
 
-def test_cancel_before_worker_starts_gives_no_press_again_prompt(help_env):
-    """Second review: worker late (mail poll), cancel pressed before it starts."""
+def test_cancel_before_worker_starts(help_env):
+    """Worker late (mail poll): prompt at the press, cancel 5 s later, worker at 12 s."""
     help_mod, service, channel, clock, said = help_env
-    service.step()                                      # startup done
     service.trigger()
-    clock.advance(11)                                   # later than 10 s: still nothing sent
+    clock.advance(5)
     service.trigger()
-    clock.advance(1)
-    service.step()                                      # worker finally runs
-    assert said == [help_mod.SAY_CANCELLED]             # no "drücken Sie nochmals Hilfe"
+    clock.advance(7)
+    service.step()
+    assert said == [help_mod.SAY_HOLD.format(name="Sandra"), help_mod.SAY_CANCELLED]
     clock.advance(30)
     service.step()
     assert channel.sent == []
     assert [a["status"] for a in help_mod.list_alerts()] == ["abgebrochen"]
+
+
+def test_press_while_cancel_pending_becomes_new_request(help_env):
+    """Third review: Help, cancel, Help again before the worker ran."""
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    clock.advance(3)
+    service.trigger()                                   # cancel (pending)
+    clock.advance(3)
+    service.trigger()                                   # needs help after all
+    service.step()
+    service.step()
+    assert said[-2:] == [help_mod.SAY_CANCELLED,
+                         "Ich informiere jetzt Sandra. Im Notfall rufen Sie bitte 144 an."]
+    assert [s[0] for s in channel.sent] == ["chat-sandra"]
+    assert [a["status"] for a in help_mod.list_alerts()] == ["abgebrochen", "offen"]
+
+
+def test_cancel_with_database_error_says_cancelled_not_144(help_env, monkeypatch):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    clock.advance(3)
+    service.trigger()
+
+    def locked():
+        raise help_mod.sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(help_mod, "get_contacts", locked)
+    service.step()
+    assert said[-1] == help_mod.SAY_CANCELLED and help_mod.SAY_CALL_144 not in said
+
+
+def test_cancel_with_no_contacts_is_stored_as_cancelled(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    help_mod.set_contacts([])
+    clock.advance(3)
+    service.trigger()
+    service.step()
+    assert said[-1] == help_mod.SAY_CANCELLED
+    assert [a["status"] for a in help_mod.list_alerts()] == ["abgebrochen"]
+
+
+def test_press_right_at_window_end_gets_feedback(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(help_mod.CANCEL_SECONDS)
+    service.trigger()                                   # before the worker flips "held"
+    assert said[-1] == help_mod.SAY_SENDING.format(name="Sandra")
 
 
 def test_panic_pressing_after_cancel_still_gets_help(help_env):

@@ -19,7 +19,9 @@ Decisions of 14.11.2026:
   CANCEL_IGNORE_SECONDS after the previous press is ignored, so pressing
   again and again in panic never cancels (nor toggles after a cancel). Within
   NO_CANCEL_AFTER_CANCEL_SECONDS after a cancel the next press is sent at
-  once and cannot be cancelled. A cancelled
+  once and cannot be cancelled. The "drücken Sie nochmals Hilfe" prompt is
+  queued by the press itself (core thread), so it is heard at once even when
+  the worker is busy, e.g. in a slow mail poll; the 10 s count from the press. A cancelled
   alert stays in the Help history as "abgebrochen" and never comes back after
   a restart.
 """
@@ -41,12 +43,12 @@ DELIVERY_GRACE_SECONDS = 60    # confirmed 14.11.: no delivery within 60 s -> sa
 ALERT_RETENTION_DAYS = 30      # D9 proposal
 CANCEL_SECONDS = 10            # second press within this time cancels (before sending)
 CANCEL_IGNORE_SECONDS = 2      # a press this soon after the previous press is ignored
-CANCEL_MIN_WINDOW_SECONDS = 5  # if the worker starts late, still this long to cancel
 NO_CANCEL_AFTER_CANCEL_SECONDS = 120   # after a cancel, the next press goes out at once
 CANCELLED_SHOWN_SECONDS = 10   # screen shows "abgebrochen" this long
 
 SAY_STARTED = "Ich informiere jetzt {name}. Im Notfall rufen Sie bitte 144 an."
 SAY_HOLD = "Ich informiere gleich {name}. Falls das ein Versehen war, drücken Sie nochmals Hilfe."
+SOMEONE = "Ihre Kontaktperson"     # name not known yet (first press right after start)
 SAY_SENT = "Ich habe {name} informiert. Im Notfall rufen Sie bitte 144 an."
 SAY_CANCELLED = ("Abgebrochen. Es wird niemand informiert. "
                  "Wenn Sie doch Hilfe brauchen, drücken Sie nochmals Hilfe.")
@@ -148,7 +150,7 @@ class HelpService:
         # Re-entrant: helpers close an alert while holding the lock
         self._lock = threading.RLock()
         # {id, contacts, pos, notified_mono, delivered, started_mono, pending_send,
-        #  pressed_mono, held, send_after}
+        #  pressed_mono, held, send_after, announce_sent}
         self._active: dict | None = None
         self._requested = False
         self._request_mono = 0.0          # when the pending request was pressed
@@ -157,6 +159,12 @@ class HelpService:
         self._last_cancel_mono: float | None = None
         self._last_press_mono: float | None = None
         self._cancel_press_mono: float | None = None
+        self._again_mono: float | None = None   # press while a cancel was pending
+        # First contact's name for the prompt said by trigger() (no DB there);
+        # None = not read yet, "" = no contacts
+        self._first_name: str | None = None
+        self._name_read = 0.0
+        self._prompted = False                  # trigger() said SAY_HOLD for this request
         self._recovered = False
         self._wake = threading.Event()
         self._stop = threading.Event()
@@ -177,38 +185,57 @@ class HelpService:
                 if (self._cancel_press_mono is not None
                         and now - self._cancel_press_mono < CANCEL_IGNORE_SECONDS):
                     return
-                self._requested = True
-                self._request_mono = now
-                self._request_cancellable = (
-                    self._last_cancel_mono is None
-                    or now - self._last_cancel_mono >= NO_CANCEL_AFTER_CANCEL_SECONDS)
+                self._new_request_locked(now)
+                if self._request_cancellable and self._first_name != "":
+                    say = SAY_HOLD.format(name=self._first_name or SOMEONE)
+                    self._prompted = True
             elif quick:
                 return      # repeated pressing (panic, bounce) never cancels
+            elif self._cancel_requested:
+                self._again_mono = now      # needs help after all: after the cancel
             elif self._can_cancel(now):
                 self._cancel_requested = True
                 self._cancel_press_mono = now
-            elif active is not None and not active["held"]:
+            elif active is not None:
                 template = SAY_ALREADY if active["delivered"] else SAY_SENDING
                 say = template.format(name=active["contacts"][active["pos"]]["name"])
-            # otherwise a cancel is already asked: ignored
+            elif self._first_name:
+                # Request taken but not started yet, too late to cancel
+                say = SAY_SENDING.format(name=self._first_name)
         self._wake.set()
         if say:
             self.announce(say)
+
+    def _new_request_locked(self, now: float) -> None:
+        self._prompted = False
+        self._requested = True
+        self._request_mono = now
+        self._request_cancellable = (
+            self._last_cancel_mono is None
+            or now - self._last_cancel_mono >= NO_CANCEL_AFTER_CANCEL_SECONDS)
 
     def _can_cancel(self, now: float) -> bool:
         """This press cancels the waiting notice (call with the lock held).
 
         _requested stays set until _start() has set _active, so a press while
         the alert is being created is also a cancel, never a second alert.
-        Before the worker has taken the request nothing can have been sent,
-        so any (not too quick) press then cancels, however late the worker is.
+        The window counts from the first press: that is when the prompt was
+        queued (by trigger()), however late the worker is.
         """
-        if self._cancel_requested:
-            return False
         active = self._active
         if active is not None:
             return bool(active["held"]) and now < active["send_after"]
-        return self._requested and self._request_cancellable
+        return (self._requested and self._request_cancellable
+                and now < self._request_mono + CANCEL_SECONDS)
+
+    def _cancelled_locked(self) -> None:
+        """Bookkeeping after a cancel (lock held). A press that came while the
+        cancel was pending becomes a new request, sent at once."""
+        self._cancel_requested = False
+        self._last_cancel_mono = self.monotonic()
+        if self._again_mono is not None:
+            self._new_request_locked(self._again_mono)
+            self._again_mono = None
 
     # --- worker: starts alerts, sends, polls acknowledgements, escalates ---
 
@@ -224,19 +251,26 @@ class HelpService:
             self._start(pressed, cancellable)
         cancelled_id = None
         with self._lock:
-            cancel, self._cancel_requested = self._cancel_requested, False
+            cancel = self._cancel_requested
+            self._cancel_requested = False
             held = self._active if self._active and self._active["held"] else None
             if held and cancel:
                 # Off the active slot at once: a later press is a new request
                 cancelled_id = held["id"]
                 self._active = None
-                self._last_cancel_mono = self.monotonic()
+                self._cancelled_locked()
+            elif cancel:
+                self._cancelled_locked()        # nothing held any more: keep a later press
             elif held and self.monotonic() >= held["send_after"]:
                 # The wait ends under the lock: from then on a press can no
                 # longer cancel, so trigger() and the send cannot race
                 held["held"] = False
+            again = self._requested and self._active is None
         if cancelled_id is not None:
             self._cancel(cancelled_id)
+        if again:
+            self._wake.set()                    # pressed again after the cancel: start it now
+        self._refresh_first_name()
         if self.monotonic() - self._last_purge > 3600:
             self._last_purge = self.monotonic()
             purge_expired(self.now())
@@ -286,7 +320,8 @@ class HelpService:
         """Create the alert. If that fails, still tell the senior to call 144.
 
         cancellable: the notice waits until CANCEL_SECONDS after the press, so
-        a second press can still cancel it. False right after a cancel.
+        a second press can still cancel it (the prompt was already said by
+        trigger()). False right after a cancel: sent at once.
         """
         try:
             contacts = get_contacts()
@@ -305,31 +340,24 @@ class HelpService:
             log.error("Help alert could not be created: %s", type(e).__name__)
             with self._lock:
                 self._requested = False
-            self.announce(SAY_CALL_144)
+                cancelled = self._cancel_requested
+                if cancelled:
+                    self._cancelled_locked()
+            # Cancelled on purpose: nothing to send anyway, so no 144 for it
+            self.announce(SAY_CANCELLED if cancelled else SAY_CALL_144)
             return
         log.warning("HELP pressed (alert %d)", alert_id)
-        if not contacts:
-            with self._lock:
-                self._requested = False
-            self._close(alert_id, NIEMAND)
-            self.announce(SAY_NO_CONTACTS)
-            return
         now_m = self.monotonic()
-        # Worker late (slow database, mail poll): the senior still gets time
-        # to cancel after hearing the announcement
-        send_after = (max(pressed_mono + CANCEL_SECONDS, now_m + CANCEL_MIN_WINDOW_SECONDS)
-                      if cancellable else now_m)
         # One lock block: no press can fall between "request taken" and
         # "alert active" (it would start a second alert)
         with self._lock:
             self._requested = False
+            self._first_name = contacts[0]["name"] if contacts else ""
             cancelled = self._cancel_requested
             if cancelled:
-                # Cancelled before the worker got here: no "drücken Sie
-                # nochmals" prompt, straight to the cancel
-                self._cancel_requested = False
-                self._last_cancel_mono = now_m
-            else:
+                self._cancelled_locked()
+            elif contacts:
+                send_after = pressed_mono + CANCEL_SECONDS if cancellable else now_m
                 # The delivery deadline (DELIVERY_GRACE_SECONDS) starts when sending may begin
                 self._active = {"id": alert_id, "contacts": contacts, "pos": 0,
                                 "notified_mono": None, "delivered": False,
@@ -337,11 +365,22 @@ class HelpService:
                                 "pending_send": True, "pressed_mono": pressed_mono,
                                 "held": cancellable, "send_after": send_after,
                                 "announce_sent": cancellable}
+            again = self._requested
+            prompted = self._prompted
+        if again:
+            self._wake.set()
         if cancelled:
             self._cancel(alert_id)
             return
-        name = contacts[0]["name"]
-        self.announce((SAY_HOLD if cancellable else SAY_STARTED).format(name=name))
+        if not contacts:
+            self._close(alert_id, NIEMAND)
+            self.announce(SAY_NO_CONTACTS)
+            return
+        if not cancellable:
+            self.announce(SAY_STARTED.format(name=contacts[0]["name"]))
+        elif not prompted:
+            # The press did not know a contact yet: say it now (window as is)
+            self.announce(SAY_HOLD.format(name=contacts[0]["name"]))
 
     def _cancel(self, alert_id: int) -> None:
         """Second press while the notice waits: nobody has been told."""
@@ -351,6 +390,18 @@ class HelpService:
         except Exception as e:
             # Row stays "offen": after a restart the device says 144 (safe side)
             log.error("Cancelled Help alert %d not stored: %s", alert_id, type(e).__name__)
+
+    def _refresh_first_name(self) -> None:
+        """Keep the first contact's name for trigger()'s prompt (worker only)."""
+        if self._first_name is not None and self.monotonic() - self._name_read < 5:
+            return
+        self._name_read = self.monotonic()
+        try:
+            contacts = get_contacts()
+        except Exception:
+            return              # keep the last known name
+        with self._lock:
+            self._first_name = contacts[0]["name"] if contacts else ""
 
     def _recover_open_alerts(self) -> None:
         """After a restart, an alert left 'offen' cannot be followed any more.
@@ -446,6 +497,8 @@ class HelpService:
     def run_worker(self, interval: float = 2.0) -> threading.Thread:
         def loop():
             while not self._stop.is_set():
+                # Clear before the step: a press during the step wakes the next wait
+                self._wake.clear()
                 try:
                     self.step()
                 except Exception as e:
@@ -453,7 +506,6 @@ class HelpService:
                 # A Help press wakes the worker at once; while the notice
                 # waits, wake exactly when it is due
                 self._wake.wait(self._wait_time(interval))
-                self._wake.clear()
         thread = threading.Thread(target=loop, name="help", daemon=True)
         thread.start()
         return thread
@@ -481,6 +533,7 @@ class HelpService:
             active = self._active
             if active is None:
                 if self._requested:
+                    # Same rule as _can_cancel(): 10 s from the press
                     rest = max(0, math.ceil(self._request_mono + CANCEL_SECONDS - now))
                     return {"kontakt": "", "rolle": "", "zugestellt": False,
                             "phase": "wartet" if self._request_cancellable else "unterwegs",
