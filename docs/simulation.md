@@ -49,10 +49,9 @@ Datenschutz wie am Gerät: Getippter Text und Antworten stehen nur im Arbeitsspe
    Die ausgegebene Zeile `DEVICE_API_TOKEN_SHA256=…` in `.env` eintragen. Den Token selbst für das Portal aufheben. In `.env` zusätzlich:
    ```
    AUDIO_DEVICE_NAME=
-   SIM_AUDIO=text
    SENIOR_NAME="Frau Keller"
    ```
-   (`AUDIO_DEVICE_NAME` leer = eingebautes Mikrofon. Werte mit Leerzeichen in Anführungszeichen.)
+   (`AUDIO_DEVICE_NAME` leer = eingebautes Mikrofon. Werte mit Leerzeichen in Anführungszeichen.) Ohne weitere Angabe läuft die Simulation mit Ton, wie das echte Gerät. Nur als Rückfall, wenn Mikrofon oder Lautsprecher nicht klappen, zusätzlich `SIM_AUDIO=text` eintragen.
 5. Freigaben für das Portal (wie am echten Gerät mit Zustimmung der Seniorin/des Seniors):
    ```bash
    python device_api_cli.py grant sandra.keller "Sandra Keller" angehoerige --help-visible --senior-consent
@@ -77,7 +76,7 @@ Dann `http://127.0.0.1:8771` im Browser öffnen. Beenden mit Ctrl+C.
 
 1. Portal öffnen (`docs/portal.md`) und als Angehörige einen Termin in 2 Minuten eintragen.
 2. Zur vollen Minute klingelt die Telefon-Seite («Es klingelt – bitte abheben»), im Ton-Modus auch hörbar.
-3. «Hörer abheben»: das Gerät sagt die Erinnerung an.
+3. «Hörer abheben»: das Gerät sagt die Erinnerung an. Ohne fällige Erinnerung begrüsst es stattdessen mit Namen, nennt den nächsten Termin von heute und stellt eine kleine Frage (Texte: `docs/begruessung-und-persona.md`).
 4. Im Portal steht beim Termin jetzt «bestätigt».
 5. «Hilfe» drücken: im Feld Kontakt-Handy erscheint die Meldung an die Kontaktperson; «Ich kümmere mich» schliesst den Alarm, das Gerät bestätigt laut.
 

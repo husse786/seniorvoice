@@ -153,13 +153,14 @@ def test_core_announces_reminder_then_starts_conversation(env, monkeypatch):
     core_mod = env.load("core_service")
     hw = __import__("hardware")
     appts = __import__("appointments")
-    sent, said = [], []
+    sent, said, fields = [], [], []
 
     class FakeSupervisor:
         on_restart = None
 
         def send(self, kind, **kw):
             sent.append(kind)
+            fields.append(kw)
 
         def check(self):
             pass
@@ -180,6 +181,8 @@ def test_core_announces_reminder_then_starts_conversation(env, monkeypatch):
         time.sleep(0.02)
     assert said and said[0].startswith("Guten Tag. Eine Erinnerung")
     assert sent == ["call_start"]
+    # The dialog gets the reminder: it does not greet again and the LLM knows the context
+    assert fields[0]["opened_with"] == said[0]
 
 
 def test_failed_announcement_is_not_heard_and_retried(setup):

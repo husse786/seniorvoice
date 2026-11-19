@@ -105,6 +105,15 @@ SIM_PHONE_HOST = os.getenv("SIM_PHONE_HOST", "127.0.0.1").strip()
 # on the Pi before the telephone is wired: web)
 SENIORVOICE_INPUT = os.getenv("SENIORVOICE_INPUT", "keyboard").strip().lower()
 
+# Texts the team edits without touching code: persona (system prompt) and
+# the building blocks of the greeting spoken when the handset is lifted
+PROMPTS_DIR = Path(os.getenv("PROMPTS_DIR", str(Path(__file__).parent / "prompts")))
+# The device opens the conversation itself on pickup (time of day, name,
+# today's next appointment, a small concrete question). false = senior speaks first.
+GREETING_ON_PICKUP = os.getenv("GREETING_ON_PICKUP", "true").lower() in ("true", "1", "yes")
+# How the device addresses the senior, e.g. "Frau Keller" (empty = no name)
+SENIOR_NAME = os.getenv("SENIOR_NAME", "").strip()
+
 # Audio Feedback
 SOUND_ENABLED = os.getenv("SOUND_ENABLED", "true").lower() in ("true", "1", "yes")
 

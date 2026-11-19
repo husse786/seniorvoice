@@ -30,6 +30,17 @@ LLM_FAILED_REPLY = (
 )
 
 
+def _senior_spoke(history: list[dict]) -> bool:
+    """Only the device's opening in the history: nothing to remember."""
+    return any(m.get("role") == "user" for m in history)
+
+
+def _for_notes(history: list[dict], opening: list[dict]) -> list[dict]:
+    """The opening (greeting with appointment, or reminder) is the device's
+    own text from the local DB: it must not turn into notes (A8)."""
+    return [m for m in history if not any(m is o for o in opening)]
+
+
 class DialogService:
     def __init__(self, bus: Bus):
         self.bus = bus
@@ -42,6 +53,7 @@ class DialogService:
         self.active = self.call_active.is_set   # replaced per call in run_call
         self.pending_button: str | None = None
         self.hint_given = False                 # emergency hint said in this call
+        self.opened_with = ""                   # reminder the core spoke at pickup
 
     # --- messages from the core ---
 
@@ -55,6 +67,7 @@ class DialogService:
             if isinstance(msg.get("text"), str):
                 sim_text.put_input(msg["text"])
         elif kind == "call_start":
+            self.opened_with = str(msg.get("opened_with") or "")[:500]
             self.call_id += 1
             self.call_active.set()
             self.call_changed.set()
@@ -224,6 +237,28 @@ class DialogService:
             speak(advice.answer_for(item, question))
         self.state("idle")
 
+    def open_call(self, speak) -> list[dict]:
+        """Start of a call. After a reminder the core has already spoken;
+        otherwise the device greets from prompts/begruessung.txt. Whatever
+        was said goes into the history (RAM) so the LLM knows what the
+        senior's first answer refers to and does not greet again."""
+        from config import GREETING_ON_PICKUP
+        opened_with, self.opened_with = self.opened_with, ""
+        if opened_with:
+            return [{"role": "assistant", "content": opened_with}]
+        if not GREETING_ON_PICKUP or not self.active():
+            return []
+        try:
+            import greeting
+            text = greeting.opening()
+        except Exception as e:
+            log.warning("Greeting failed: %s", type(e).__name__)
+            return []
+        self.state("speaking")
+        speak(text)
+        self.state("idle")
+        return [{"role": "assistant", "content": text}]
+
     def run_call(self) -> None:
         """One call: turns until the handset is hung up."""
         from config import MEMORY_TIMEOUT
@@ -241,7 +276,8 @@ class DialogService:
         self.active = active
 
         _facts, facts_block = _reload_facts()
-        history: list[dict] = []
+        history: list[dict] = self.open_call(speak)
+        opening = list(history)
         last_speech = time.monotonic()
         while active():
             try:
@@ -266,15 +302,17 @@ class DialogService:
                     notice=self.notice,
                 )
                 if pre_reset is not None:
-                    extract_facts_async(pre_reset, source=f"verbal-{int(time.time())}")
+                    extract_facts_async(_for_notes(pre_reset, opening),
+                                        source=f"verbal-{int(time.time())}")
                 if run_pipeline.last_text.strip():
                     last_speech = time.monotonic()
                     # Also after "Vergiss alles": deleted notes leave the prompt
                     _facts, facts_block = _reload_facts()
-                elif history and time.monotonic() - last_speech > MEMORY_TIMEOUT:
+                elif _senior_spoke(history) and time.monotonic() - last_speech > MEMORY_TIMEOUT:
                     # Handset off the hook, nobody speaking: end the conversation
                     log.info("Conversation reset (silence %ds)", MEMORY_TIMEOUT)
-                    extract_facts_async(history, source=f"timeout-{int(time.time())}")
+                    extract_facts_async(_for_notes(history, opening),
+                                        source=f"timeout-{int(time.time())}")
                     history = []
                     _facts, facts_block = _reload_facts()
                 if callback.is_goodbye(run_pipeline.last_text):
@@ -289,8 +327,8 @@ class DialogService:
                         pass
                 self.state("idle")
         # Hung up: remember notes (7 days), forget the conversation itself
-        if history:
-            extract_facts_async(history, source=f"call-{int(time.time())}")
+        if _senior_spoke(history):
+            extract_facts_async(_for_notes(history, opening), source=f"call-{int(time.time())}")
 
     def run(self) -> None:
         from llm_backend import complete

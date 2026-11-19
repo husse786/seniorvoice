@@ -214,6 +214,7 @@ class Core:
         # call_start reached the current dialog process (False after a restart)
         self.call_delivered = False
         self.announcing = False
+        self.opened_with = ""        # reminder spoken at pickup (RAM only)
         self._call_lock = threading.Lock()
         self.tickers: list[Callable[[], None]] = [supervisor.check]
         self.running = True
@@ -260,7 +261,10 @@ class Core:
     def _start_call_if_pending(self) -> None:
         with self._call_lock:
             if self.in_call and not self.announcing and not self.call_delivered:
-                self.call_delivered = self.supervisor.send("call_start")
+                # opened_with: the reminder just spoken, so the dialog does
+                # not greet again and the LLM knows what "Ja, danke" refers to
+                self.call_delivered = self.supervisor.send(
+                    "call_start", opened_with=self.opened_with)
 
     def handle(self, event: InputEvent) -> None:
         if event.kind == "quit":
@@ -272,6 +276,7 @@ class Core:
         elif event.kind == "hook_off":
             self.in_call = True
             text = self.reminders.on_hook_off() if self.reminders else None
+            self.opened_with = text or ""
             self.ringer.stop()
             if text:
                 # Reminder first (fixed text, no LLM), then normal conversation
