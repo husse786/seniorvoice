@@ -20,9 +20,12 @@ import callback
 setup_logging()
 log = get_logger("dialog")
 
-# Buttons answered in the dialog during a call (B3). "sprechen": the call is
-# already a conversation.
+# Buttons answered in the dialog during a call (B3).
 SPOKEN_BUTTONS = ("familie", "heute", "kalender", "rat")
+# "Sprechen" (decided 19.11.2026): stop talking at once and listen. After a
+# quiet spell the device first says where the conversation was.
+RECAP_AFTER_SECONDS = 60
+RECAP_MAX_WORDS = 12
 
 LLM_FAILED_REPLY = (
     "Entschuldigung, ich kann gerade nicht antworten. "
@@ -54,6 +57,8 @@ class DialogService:
         self.pending_button: str | None = None
         self.hint_given = False                 # emergency hint said in this call
         self.opened_with = ""                   # reminder the core spoke at pickup
+        self.talk_pressed = False               # button "Sprechen" since the last turn
+        self.current_state = "idle"
 
     # --- messages from the core ---
 
@@ -76,6 +81,8 @@ class DialogService:
             self.call_changed.set()
         elif kind == "button" and msg.get("name") in SPOKEN_BUTTONS:
             self.pending_button = msg.get("name")
+        elif kind == "button" and msg.get("name") == "sprechen":
+            self.on_talk()
         elif kind == "closed":
             # Core is gone: stop, systemd/core will start us again
             self.running = False
@@ -83,7 +90,28 @@ class DialogService:
             self.call_changed.set()
 
     def state(self, state: str) -> None:
+        self.current_state = state
         self.bus.send("state", state=state)
+
+    def on_talk(self) -> None:
+        """Button "Sprechen": while the device talks or thinks, it stops and
+        listens. While it already listens, nothing changes (the sentence being
+        spoken must not get lost)."""
+        if not self.call_active.is_set():
+            return
+        if self.current_state in ("speaking", "thinking"):
+            import tts
+            tts.interrupt()
+        self.talk_pressed = True
+
+    def recap(self, history: list[dict]) -> str | None:
+        """Where were we: the senior's last words, without the LLM (RAM only)."""
+        last = next((m["content"] for m in reversed(history) if m.get("role") == "user"), "")
+        words = last.split()
+        if not words:
+            return None
+        quote = " ".join(words[:RECAP_MAX_WORDS]) + (" …" if len(words) > RECAP_MAX_WORDS else "")
+        return f"Wo waren wir? Sie hatten gesagt: {quote} Erzählen Sie ruhig weiter."
 
     def hear(self) -> str:
         """One spoken answer of the senior (typed on the phone page in the
@@ -279,6 +307,11 @@ class DialogService:
         self.hint_given = False
         import sim_text
         sim_text.clear_input()        # nothing typed before lifting counts
+        # "Sprechen" pressed in an earlier call must not mute this one
+        self.talk_pressed = False
+        import tts as _tts
+        if hasattr(_tts, "resume"):
+            _tts.resume()
 
         def active() -> bool:
             return self.running and self.call_active.is_set() and self.call_id == my_call
@@ -290,6 +323,16 @@ class DialogService:
         last_speech = time.monotonic()
         while active():
             try:
+                if self.talk_pressed:
+                    self.talk_pressed = False
+                    import tts
+                    tts.resume()
+                    quiet = time.monotonic() - last_speech > RECAP_AFTER_SECONDS
+                    text = self.recap(history) if quiet and _senior_spoke(history) else None
+                    if text and active():
+                        self.state("speaking")
+                        speak(text)
+                        self.state("idle")
                 button, self.pending_button = self.pending_button, None
                 if button == "familie":
                     self.family_message()

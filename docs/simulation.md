@@ -21,6 +21,8 @@ Derselbe Code läuft auf dem Pi (`docs/pi-einrichten.md`): Dort startet ihn der 
 
 Es gibt nichts umzustellen. **Sprechen und Tippen gehen immer gleichzeitig.** Ein getippter Satz ersetzt die nächste gesprochene Antwort. Was das Gerät sagt, ist zu hören und steht zusätzlich als Text da.
 
+Die Taste «Sprechen» unterbricht das Gerät: Es hört sofort auf zu reden und hört zu. Nach mehr als einer Minute Stille sagt es zuerst kurz, wo das Gespräch war («Wo waren wir? Sie hatten gesagt: …»).
+
 Beim Start prüft die Simulation selbst, ob Mikrofon, Whisper und Piper da sind. Fehlt etwas, läuft sie nur mit Tippen weiter, und auf der Seite steht, was fehlt. Ist das Mikrofon aus `.env` (die Webcam C920 des Pi) nicht da, nimmt sie das eingebaute Mikrofon. Hört das Mikrofon nichts, erscheint ein Hinweis im Gesprächsfeld.
 
 Datenschutz wie am Gerät: Gesprochenes, Getipptes und Antworten stehen nur im Arbeitsspeicher und verschwinden beim Auflegen von der Seite und vom Bildschirm. Nichts davon kommt in eine Datei, ein Log oder die Messwerte (A8, F1). Durchsagen über den Lautsprecher und Meldungen an die Kontaktperson bleiben im Gesprächsfeld stehen, bis die Simulation neu startet. Die Seite ist nur von diesem Rechner aus erreichbar (127.0.0.1).
