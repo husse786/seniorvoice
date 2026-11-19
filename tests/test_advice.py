@@ -237,6 +237,34 @@ def test_emergency_is_not_logged(advice, caplog):
     assert "gestürzt" not in caplog.text and "Notfall" not in caplog.text
 
 
+# --- what the device says when Rat is pressed (decision 19.11.2026) ---
+
+def _items(*topics):
+    return [{"topic": t, "text": "x", "created_by": "Spitex"} for t in topics]
+
+
+def test_ask_without_entries_is_the_plain_question(advice):
+    assert advice.ask_for([]) == advice.ASK
+
+
+@pytest.mark.parametrize("topics, named", [
+    (("Trinken",), "Trinken"),
+    (("Trinken", "Spitex"), "Trinken und Spitex"),
+    (("Trinken", "Spitex", "Einkauf"), "Trinken, Spitex und Einkauf"),
+    (("A", "B", "C", "D", "E", "F"), "A, B, C, D, E und einem weiteren Thema"),
+    (("A", "B", "C", "D", "E", "F", "G", "H"), "A, B, C, D, E und 3 weiteren Themen"),
+    (("Trinken.", "Spitex: ", "?"), "Trinken und Spitex"),
+])
+def test_ask_names_topics(advice, topics, named):
+    assert advice.ask_for(_items(*topics)) == (
+        f"Ich kann Ihnen etwas sagen zu: {named}. Was möchten Sie wissen?")
+
+
+def test_ask_never_reads_entered_texts(advice):
+    items = [{"topic": "Weisse Tablette", "text": "Zwei Stück morgens", "created_by": "Spitex"}]
+    assert "Zwei" not in advice.ask_for(items)
+
+
 # --- dialog: the Rat button during a call ---
 
 def _dialog(env, monkeypatch, transcripts, llm_reply="2"):
@@ -267,8 +295,28 @@ def _dialog(env, monkeypatch, transcripts, llm_reply="2"):
 def test_rat_reads_entry(env, monkeypatch):
     service, spoken = _dialog(env, monkeypatch, ["Wann nehme ich die weisse Tablette?"])
     service.advice_question()
-    assert spoken[0] == "Was möchten Sie wissen? Bitte stellen Sie Ihre Frage."
+    assert spoken[0] == ("Ich kann Ihnen etwas sagen zu: Telefonnummer Spitex, Weisse Tablette, Besuch der Spitex, Hausarztpraxis und Einkauf. Was möchten Sie wissen?")
     assert spoken[1].startswith("Zum Thema Weisse Tablette hat die Spitex hinterlegt: Die weisse Tablette")
+
+
+def test_rat_without_entries_asks_plainly(env, monkeypatch):
+    service, spoken = _dialog(env, monkeypatch, ["Wann kommt die Spitex?"], llm_reply="0")
+    advice = sys.modules["advice"]
+    for item in advice.list_items():
+        advice.delete_item(item["id"])
+    service.advice_question()
+    assert spoken == [advice.ASK, advice.NO_ENTRY]
+
+
+def test_rat_entries_unreadable_still_asks(env, monkeypatch):
+    service, spoken = _dialog(env, monkeypatch, ["Ich bin gestürzt"])
+    advice = sys.modules["advice"]
+
+    def broken():
+        raise RuntimeError("db locked")
+    monkeypatch.setattr(advice, "list_items", broken)
+    service.advice_question()
+    assert spoken == [advice.ASK, advice.EMERGENCY]
 
 
 def test_rat_emergency_in_call(env, monkeypatch):
@@ -310,7 +358,7 @@ def test_rat_hung_up_says_nothing_more(env, monkeypatch):
         return "Wann nehme ich die weisse Tablette?"
     stt.transcribe = hang_up
     service.advice_question()
-    assert spoken == ["Was möchten Sie wissen? Bitte stellen Sie Ihre Frage."]
+    assert spoken == ["Ich kann Ihnen etwas sagen zu: Telefonnummer Spitex, Weisse Tablette, Besuch der Spitex, Hausarztpraxis und Einkauf. Was möchten Sie wissen?"]
 
 
 def test_rat_question_stays_out_of_history_and_files(env, monkeypatch):

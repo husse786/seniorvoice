@@ -244,8 +244,15 @@ class DialogService:
         from tts import speak
         from sounds import play_sound
 
+        # The entries are read once: the topics named and the topics the
+        # question is matched against are the same
+        try:
+            items = advice.list_items()
+        except Exception as e:
+            log.warning("Rat: entries could not be read (%s)", type(e).__name__)
+            items = []      # then: plain question, emergency hint, "nichts hinterlegt"
         self.state("speaking")
-        speak(advice.ASK)
+        speak(advice.ask_for(items))
         play_sound("listen")
         self.state("listening")
         question = self.hear().strip()
@@ -268,7 +275,7 @@ class DialogService:
             self.state("idle")
             return
         self.state("thinking")
-        item = advice.find_item(question)
+        item = advice.find_item(question, items)
         if self.active() and (item is not None or not emergency):
             self.state("speaking")
             speak(advice.answer_for(item, question))
