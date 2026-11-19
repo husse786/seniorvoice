@@ -54,8 +54,14 @@ MEMORY_PURGE_INTERVAL = int(os.getenv("MEMORY_PURGE_INTERVAL", "3600"))
 # Long-term Memory (SQLite)
 MEMORY_DB_PATH = os.getenv("MEMORY_DB_PATH", str(Path.home() / "seniorvoice" / "seniorvoice.db"))
 
-# Benchmark DB (defaults to same SQLite DB; override with DB_PATH for separate storage)
-DB_PATH = os.getenv("DB_PATH", MEMORY_DB_PATH)
+# Technical metrics (timings, error codes, service events, benchmarks) live in a
+# database of their own, next to the senior's data but separate from it. Grafana
+# and the health view read only this file, never seniorvoice.db (notes,
+# appointments, Help). FS26 kept everything in one file.
+METRICS_DB_PATH = os.getenv("METRICS_DB_PATH", str(Path(MEMORY_DB_PATH).parent / "metrics.db"))
+
+# Benchmark DB (defaults to the metrics database)
+DB_PATH = os.getenv("DB_PATH", METRICS_DB_PATH)
 
 # PIR Sensor
 PIR_GPIO_PIN = int(os.getenv("PIR_GPIO_PIN", "4"))
@@ -82,6 +88,16 @@ DEVICE_API_PORT = int(os.getenv("DEVICE_API_PORT", "8770"))
 DEVICE_API_TOKEN_SHA256 = os.getenv("DEVICE_API_TOKEN_SHA256", "").strip().lower()
 AUDIT_RETENTION_DAYS = int(os.getenv("AUDIT_RETENTION_DAYS", "30"))
 
+# Simulated telephone (development and demo without the phone hardware).
+# SIM_AUDIO=text: the senior's words are typed on the simulated phone page and
+# the device's answers are shown there instead of spoken (no microphone, no
+# speaker needed). Default "audio": microphone and speaker as on the device.
+SIM_AUDIO = os.getenv("SIM_AUDIO", "audio").strip().lower()
+if SIM_AUDIO not in ("audio", "text"):
+    SIM_AUDIO = "audio"
+# Page of the simulated phone; always bound to 127.0.0.1 (this computer only)
+SIM_PHONE_PORT = int(os.getenv("SIM_PHONE_PORT", "8771"))
+
 # Audio Feedback
 SOUND_ENABLED = os.getenv("SOUND_ENABLED", "true").lower() in ("true", "1", "yes")
 
@@ -100,3 +116,6 @@ LOG_CONTENT = os.getenv("LOG_CONTENT", "false").lower() in ("true", "1", "yes")
 # so it never lands on the SSD, and is deleted right after playback.
 _default_output = "/dev/shm/seniorvoice" if Path("/dev/shm").is_dir() else "/tmp/seniorvoice"
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", _default_output))
+
+# Live state of the core for the health view (RAM, rewritten every few seconds)
+STATUS_FILE = OUTPUT_DIR / "core_status.json"

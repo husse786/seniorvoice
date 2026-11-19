@@ -116,8 +116,6 @@ def run_pipeline(
     pre_reset_history is set when a verbal reset occurred, so the caller
     can trigger fact extraction on the old conversation.
     """
-    from audio_capture import record_until_silence
-    from stt import transcribe
     from llm_client import chat, chat_streaming
     from tts import speak
 
@@ -138,16 +136,30 @@ def run_pipeline(
 
     play_sound("listen")
 
-    # Step 2: Record audio
-    on_state("listening")
-    log.info("Listening...")
-    wav_bytes = record_until_silence()
+    import sim_text
+    if sim_text.enabled():
+        # Simulation, text mode: the sentence is typed on the phone page
+        on_state("listening")
+        from config import MAX_RECORD_SECONDS
+        text = sim_text.wait_input(still_active, timeout=MAX_RECORD_SECONDS)
+        stt_ms = 0
+        if not text.strip():
+            run_pipeline.last_text = ""
+            on_state("idle")
+            return history, None      # nothing typed: no turn, no metric
+    else:
+        # Step 2: Record audio
+        on_state("listening")
+        log.info("Listening...")
+        from audio_capture import record_until_silence
+        from stt import transcribe
+        wav_bytes = record_until_silence()
 
-    # Step 3: Transcribe
-    log.info("Transcribing...")
-    t_stt = time.perf_counter()
-    text = transcribe(wav_bytes)
-    stt_ms = int((time.perf_counter() - t_stt) * 1000)
+        # Step 3: Transcribe
+        log.info("Transcribing...")
+        t_stt = time.perf_counter()
+        text = transcribe(wav_bytes)
+        stt_ms = int((time.perf_counter() - t_stt) * 1000)
 
     run_pipeline.last_text = text
     if not still_active():

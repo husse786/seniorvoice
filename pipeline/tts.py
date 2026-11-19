@@ -69,6 +69,9 @@ def player_command(wav_path: Path, output: str = "handset") -> list[str] | None:
         return [paplay, str(wav_path)]
     if aplay:
         return [aplay, "-q", str(wav_path)]
+    afplay = shutil.which("afplay")      # macOS (simulated device on a Mac)
+    if afplay:
+        return [afplay, str(wav_path)]
     return None
 
 
@@ -84,7 +87,15 @@ def play(wav_path: Path, output: str = "handset") -> None:
 
 
 def speak(text: str, output: str = "handset") -> None:
-    """Synthesize and play text, then delete the audio file (decision A8)."""
+    """Synthesize and play text, then delete the audio file (decision A8).
+
+    In the text mode of the simulation the sentence is shown on the phone
+    page instead (sim_text.py).
+    """
+    import sim_text
+    if sim_text.enabled():
+        sim_text.show(text, output)
+        return
     wav_path = synthesize(text)
     try:
         play(wav_path, output)

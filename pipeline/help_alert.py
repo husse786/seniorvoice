@@ -326,6 +326,11 @@ class HelpService:
         self._stop.set()
         self._wake.set()
 
+    def is_open(self) -> bool:
+        """An alert is running (shown on the simulated phone page)."""
+        with self._lock:
+            return self._active is not None or self._requested
+
     def simulate_ack(self) -> None:
         """Keyboard simulation: current contact presses "Ich kümmere mich"."""
         with self._lock:

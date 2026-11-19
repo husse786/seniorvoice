@@ -14,6 +14,7 @@ So Help and reminders keep working when the LLM hangs (condition of A12).
 
 import argparse
 import itertools
+import json
 import os
 import queue
 import signal
@@ -61,6 +62,9 @@ class DialogSupervisor:
         self.command = command or [sys.executable, str(DIALOG_SCRIPT)]
         self.on_restart = on_restart or (lambda reason: None)
         self.on_ready: Callable[[], None] = lambda: None
+        # Text mode of the simulation: sentences of the dialog for the phone page
+        self.on_sim_say: Callable[[str, str], None] = lambda text, output: None
+        self.last_restart = ""          # "exited", "llm_hang" or "no_heartbeat"
         self.clock = clock
         self.proc: subprocess.Popen | None = None
         self.bus: Bus | None = None
@@ -105,6 +109,13 @@ class DialogSupervisor:
     def _restart(self, reason: str) -> None:
         log.warning("Restarting dialog process: %s", reason)
         self.restarts += 1
+        self.last_restart = ("llm_hang" if reason.startswith("LLM hang") else
+                             "no_heartbeat" if reason.startswith("no heartbeat") else "exited")
+        try:
+            import metrics
+            metrics.log_event("dialog_hang" if self.last_restart == "llm_hang" else "dialog_restart")
+        except Exception as e:
+            log.error("Metrics event failed: %s", type(e).__name__)
         if self.proc and self.proc.poll() is None:
             self.proc.kill()
             self.proc.wait()
@@ -131,6 +142,21 @@ class DialogSupervisor:
                     self._backoff = 1.0
         if kind == "state" and msg.get("state") == "ready":
             self.on_ready()
+        elif kind == "sim_say" and isinstance(msg.get("text"), str):
+            self.on_sim_say(msg["text"], str(msg.get("output", "handset")))
+
+    def health_state(self) -> str:
+        """Dialog state for the health view. Deliberately coarse: whether a
+        conversation is going on right now is not shown (daily routine)."""
+        with self._lock:
+            state = self.state
+        if self.proc is None:
+            return "neustart"
+        if state in ("starting", "loading"):
+            return "laedt"
+        if state in ("ready", "idle", "listening", "thinking", "speaking"):
+            return "bereit"
+        return "unbekannt"
 
     def send(self, msg_type: str, **fields) -> bool:
         if self.bus is None or self.proc is None:
@@ -264,6 +290,10 @@ class Core:
             with self._call_lock:
                 self.call_delivered = False
             self.supervisor.send("call_end")
+        elif event.kind == "sim_text":
+            # Text mode of the simulation: typed sentence to the dialog (RAM only)
+            if self.in_call:
+                self.supervisor.send("sim_text", text=event.name)
         elif event.kind == "sim_ack" and hasattr(self.help, "simulate_ack"):
             self.help.simulate_ack()
         elif event.kind == "button" and event.name == "hilfe":
@@ -273,6 +303,13 @@ class Core:
             self._say_async(LIFT_HANDSET)
         elif event.kind == "button":
             self.supervisor.send("button", name=event.name)
+
+    def phone_state(self) -> dict:
+        """What the simulated phone page shows (this computer only)."""
+        is_open = getattr(self.help, "is_open", None)
+        return {"in_call": self.in_call, "ringing": bool(getattr(self.ringer, "ringing", False)),
+                "announcing": self.announcing, "dialog": self.supervisor.health_state(),
+                "help_open": bool(is_open()) if is_open else False}
 
     def tick(self) -> None:
         for ticker in self.tickers:
@@ -293,6 +330,41 @@ class Core:
                 self.tick()
         finally:
             self.supervisor.stop()
+
+
+class StatusWriter:
+    """Writes the core's technical state for the health view of the device API.
+
+    A small JSON file in RAM (OUTPUT_DIR), rewritten every few seconds; the
+    device API treats it as stale (core not running) when it stops changing.
+    No content and no sign of whether a call is going on.
+    """
+
+    INTERVAL = 5.0
+
+    def __init__(self, core: "Core", input_mode: str, audio_mode: str,
+                 channel_name: str, path: Path | None = None,
+                 clock: Callable[[], float] = time.monotonic):
+        from config import STATUS_FILE
+        self.core = core
+        self.path = Path(path or STATUS_FILE)
+        self.clock = clock
+        self.base = {"pid": os.getpid(), "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                     "input": input_mode, "audio": audio_mode, "channel": channel_name}
+        self._last = 0.0
+
+    def __call__(self) -> None:
+        now = self.clock()
+        if now - self._last < self.INTERVAL:
+            return
+        self._last = now
+        sup = self.core.supervisor
+        data = dict(self.base, updated=time.time(), dialog=sup.health_state(),
+                    dialog_restarts=sup.restarts, last_restart=sup.last_restart)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data), encoding="utf-8")
+        os.replace(tmp, self.path)
 
 
 class AnnouncementQueue:
@@ -358,8 +430,9 @@ def _speak(text: str, output: str = "speaker") -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="SeniorVoice core process")
-    parser.add_argument("--input", choices=["keyboard", "gpio"], default="keyboard",
-                        help="keyboard simulation or the telephone on the Pi (GPIO)")
+    parser.add_argument("--input", choices=["web", "keyboard", "gpio"], default="keyboard",
+                        help="web = simulated telephone in the browser, keyboard = "
+                             "commands on the console, gpio = the telephone on the Pi")
     args = parser.parse_args()
 
     setup_logging()
@@ -370,16 +443,31 @@ def main() -> None:
         log.critical("Legacy purge failed, not starting: %s", e)
         sys.exit(1)
 
-    from config import MEMORY_PURGE_INTERVAL
+    import config
+    import metrics
+    import sim_text
     from memory import PurgeService
-    PurgeService(interval=MEMORY_PURGE_INTERVAL).start()
+    PurgeService(interval=config.MEMORY_PURGE_INTERVAL).start()
+    text_mode = sim_text.enabled()
+    if text_mode and args.input == "gpio":
+        log.critical("SIM_AUDIO=text is for the simulation only, not with --input gpio")
+        sys.exit(1)
 
     from channels import channel_from_env
     from help_alert import HelpService
+    channel = channel_from_env()
+    phone = None
+    if args.input == "web":
+        from sim_phone import SimPhone
+        phone = SimPhone(config.SIM_PHONE_PORT, text_mode=text_mode)
+        channel = _ShowOnPhone(channel, phone)
+        if text_mode:
+            sim_text.set_sink(phone.show)
+    # Real ring tone whenever there is a speaker (also on the simulated phone)
+    ringer = SimulatedRinger() if text_mode or args.input == "keyboard" else AudioRinger()
     # Help speaks through a queue: the core loop never waits for audio
-    ringer = AudioRinger() if args.input == "gpio" else SimulatedRinger()
     voice = AnnouncementQueue(_speak, ringer=ringer)
-    help_service = HelpService(channel_from_env(), announce=voice.say_urgent,
+    help_service = HelpService(channel, announce=voice.say_urgent,
                                senior_name=os.getenv("SENIOR_NAME", ""))
     help_service.run_worker()
     from family import run_sender
@@ -387,16 +475,69 @@ def main() -> None:
     core = Core(DialogSupervisor(), ringer, help_handler=help_service,
                 announce=voice.say_and_wait,
                 announce_handset=lambda text: voice.say_and_wait(text, output="handset"))
-    if args.input == "gpio":
+    core.tickers.append(StatusWriter(core, args.input, "text" if text_mode else "audio",
+                                     type(channel.inner if phone else channel).__name__))
+    core.tickers.append(_MetricsPurge())
+    try:
+        metrics.log_event("core_start")
+    except Exception as e:
+        log.error("Metrics event failed: %s", type(e).__name__)
+    if phone is not None:
+        core.supervisor.on_sim_say = phone.show
+        phone._state = core.phone_state
+        try:
+            phone.start(core.events)
+        except OSError as e:
+            log.critical("Simulated telephone not started: %s", e)
+            sys.exit(1)
+    elif args.input == "gpio":
         GpioInput().start(core.events)
     else:
         KeyboardInput().start(core.events)
     signal.signal(signal.SIGTERM, lambda *a: setattr(core, "running", False))
-    log.info("Core started")
+    log.info("Core started (input %s, audio %s)", args.input, "text" if text_mode else "audio")
     core.run()
     log.info("Core stopped")
     if core.failed:
+        try:
+            metrics.log_event("input_failed")
+        except Exception:
+            pass
         sys.exit(1)   # systemd restarts the service
+
+
+class _ShowOnPhone:
+    """Channel wrapper for the simulation: what a contact receives also
+    appears in the "Kontakt-Handy" panel of the phone page (RAM only)."""
+
+    def __init__(self, inner, phone):
+        self.inner = inner
+        self.phone = phone
+
+    def send_alert(self, address, text, alert_id):
+        self.inner.send_alert(address, text, alert_id)
+        self.phone.show(f"An {address}: {text}", "kanal")
+
+    def send_message(self, address, text):
+        self.inner.send_message(address, text)
+        self.phone.show(f"Nachricht an {address}: {text}", "kanal")
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+class _MetricsPurge:
+    """Deletes metrics older than metrics.METRICS_RETENTION_DAYS, once an hour."""
+
+    def __init__(self):
+        self._last = 0.0
+
+    def __call__(self) -> None:
+        if time.monotonic() - self._last < 3600:
+            return
+        self._last = time.monotonic()
+        import metrics
+        metrics.purge()
 
 
 if __name__ == "__main__":
