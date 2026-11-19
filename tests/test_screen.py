@@ -249,3 +249,17 @@ def test_silent_microphone_gives_hint(env):
     finally:
         sim_text.set_sink(None)
     assert len(shown) == 1 and shown[0][0] == "hinweis" and "Mikrofon" in shown[0][1]
+
+
+def test_note_names_the_microphone_in_use(audio_env):
+    core, _, monkeypatch = audio_env
+    import config
+    import sys as _sys
+    _sys.modules["sounddevice"].query_devices = lambda kind=None: (
+        {"name": "MacBook Air Microphone"} if kind == "input" else
+        [{"name": "iPhone Microphone", "max_input_channels": 1},
+         {"name": "MacBook Air Microphone", "max_input_channels": 1}])
+    mode, note = core.resolve_sim_audio("auto")
+    assert mode == "audio" and "Mikrofon: MacBook Air Microphone" in note and "Tippen geht" in note
+    monkeypatch.setattr(config, "AUDIO_DEVICE_NAME", "iphone")
+    assert "Mikrofon: iPhone Microphone" in core.resolve_sim_audio("auto")[1]

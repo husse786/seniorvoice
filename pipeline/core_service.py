@@ -458,7 +458,7 @@ def resolve_sim_audio(requested: str) -> tuple[str, str]:
     import importlib.util
     import config
     if requested == "text":
-        return "text", "Nur Tippen (SIM_AUDIO=text)."
+        return "text", "Nur Tippen für diesen Start (SIM_AUDIO=text)."
     missing = []
     if shutil.which("piper") is None or not Path(config.PIPER_VOICE).is_file():
         missing.append("Sprachausgabe Piper (Programm oder Stimme)")
@@ -468,19 +468,30 @@ def resolve_sim_audio(requested: str) -> tuple[str, str]:
     try:
         import sounddevice as sd
         mics = [d["name"] for d in sd.query_devices() if d["max_input_channels"] > 0]
+        wanted = config.AUDIO_DEVICE_NAME.strip()
         if not mics:
             missing.append("Mikrofon")
-        elif config.AUDIO_DEVICE_NAME.strip() and not any(
-                config.AUDIO_DEVICE_NAME.lower() in m.lower() for m in mics):
-            note = (f"Mikrofon «{config.AUDIO_DEVICE_NAME}» nicht gefunden, "
-                    "das Standard-Mikrofon wird benutzt.")
-            _set_env("AUDIO_DEVICE_NAME", "")
+        else:
+            match = [m for m in mics if wanted and wanted.lower() in m.lower()]
+            if wanted and not match:
+                note = f"«{wanted}» nicht gefunden, Standard-Mikrofon. "
+                _set_env("AUDIO_DEVICE_NAME", "")
+            used = match[0] if match else _default_mic(sd) or mics[0]
+            note = f"Ton an. Mikrofon: {used}. " + note
     except Exception as e:
         missing.append(f"Mikrofon ({type(e).__name__})")
     if missing:
         log.warning("Simulation without sound, missing: %s", ", ".join(missing))
         return "text", "Ton aus, es fehlt: " + ", ".join(missing) + ". Tippen geht."
-    return "audio", note
+    return "audio", note + "Tippen geht auch."
+
+
+def _default_mic(sd) -> str:
+    """Name of the system's default microphone (macOS: Systemeinstellungen, Ton)."""
+    try:
+        return sd.query_devices(kind="input")["name"]
+    except Exception:
+        return ""
 
 
 def main() -> None:
@@ -514,6 +525,7 @@ def main() -> None:
         # Simulation: sound when it works, otherwise text; typing always works
         mode, audio_note = resolve_sim_audio(config.SIM_AUDIO)
         _set_env("SIM_AUDIO", mode)
+        print(f"  {audio_note}", flush=True)      # terminal: what this start uses
     elif config.SIM_AUDIO == "auto":
         _set_env("SIM_AUDIO", "audio")
     text_mode = sim_text.enabled()
