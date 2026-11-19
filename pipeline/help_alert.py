@@ -280,8 +280,10 @@ class HelpService:
             return False
         if active is None:
             return False  # nothing open: old or unknown acknowledgements are ignored
-        contacts = {c["address"]: c for c in active["contacts"]}
+        # E-mail addresses are not case sensitive (F4); chat ids are digits
+        contacts = {c["address"].strip().lower(): c for c in active["contacts"]}
         for alert_id, address in acks:
+            address = str(address).strip().lower()
             if alert_id != active["id"] or address not in contacts:
                 continue  # unknown sender or old alert: ignored
             name = contacts[address]["name"]
