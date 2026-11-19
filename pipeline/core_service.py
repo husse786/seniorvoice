@@ -430,10 +430,16 @@ def _speak(text: str, output: str = "speaker") -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="SeniorVoice core process")
-    parser.add_argument("--input", choices=["web", "keyboard", "gpio"], default="keyboard",
+    parser.add_argument("--input", choices=["web", "keyboard", "gpio"], default=None,
                         help="web = simulated telephone in the browser, keyboard = "
-                             "commands on the console, gpio = the telephone on the Pi")
+                             "commands on the console, gpio = the telephone on the Pi "
+                             "(default: SENIORVOICE_INPUT, else keyboard)")
     args = parser.parse_args()
+    if args.input is None:
+        import config as _config
+        args.input = _config.SENIORVOICE_INPUT
+        if args.input not in ("web", "keyboard", "gpio"):
+            parser.error("SENIORVOICE_INPUT must be web, keyboard or gpio")
 
     setup_logging()
     from privacy_migration import run_legacy_purge
@@ -459,7 +465,8 @@ def main() -> None:
     phone = None
     if args.input == "web":
         from sim_phone import SimPhone
-        phone = SimPhone(config.SIM_PHONE_PORT, text_mode=text_mode)
+        phone = SimPhone(config.SIM_PHONE_PORT, text_mode=text_mode,
+                         host=config.SIM_PHONE_HOST)
         channel = _ShowOnPhone(channel, phone)
         if text_mode:
             sim_text.set_sink(phone.show)
@@ -487,7 +494,7 @@ def main() -> None:
         phone._state = core.phone_state
         try:
             phone.start(core.events)
-        except OSError as e:
+        except (OSError, ValueError) as e:
             log.critical("Simulated telephone not started: %s", e)
             sys.exit(1)
     elif args.input == "gpio":

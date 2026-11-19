@@ -14,7 +14,7 @@ Solange das Telefon (Gabel, Knöpfe, Hörer) nicht zusammengebaut ist, läuft di
 
 Alles andere ist derselbe Code wie später am Telefon: Kern und Gesprächsprozess (A12), Erinnerungen mit Klingeln (A5/A6), Help mit Eskalation (A13/A14), Rat (B2), Gedächtnis mit 7-Tage-Frist (A8), Geräte-API für das Portal (B4) und die Messwerte für den Gerätezustand.
 
-Derselbe Start funktioniert auf dem Pi. Sobald Gabel und Knöpfe verdrahtet sind, wird nur `--input web` durch `--input gpio` ersetzt (`deploy/seniorvoice.service`).
+Derselbe Code läuft auf dem Pi (`docs/pi-einrichten.md`): Dort startet ihn der Dienst mit `SENIORVOICE_INPUT=web`, bis Gabel und Knöpfe verdrahtet sind; danach mit `gpio`.
 
 ## Zwei Betriebsarten
 

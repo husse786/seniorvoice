@@ -97,6 +97,13 @@ if SIM_AUDIO not in ("audio", "text"):
     SIM_AUDIO = "audio"
 # Page of the simulated phone; always bound to 127.0.0.1 (this computer only)
 SIM_PHONE_PORT = int(os.getenv("SIM_PHONE_PORT", "8771"))
+# Where the simulated phone page listens. 127.0.0.1 = only this computer. On a
+# Pi without screen: its WireGuard address, so the team laptop opens the page
+# through the tunnel (never all interfaces: the page has no login).
+SIM_PHONE_HOST = os.getenv("SIM_PHONE_HOST", "127.0.0.1").strip()
+# Input when core_service.py is started without --input (systemd unit: gpio;
+# on the Pi before the telephone is wired: web)
+SENIORVOICE_INPUT = os.getenv("SENIORVOICE_INPUT", "keyboard").strip().lower()
 
 # Audio Feedback
 SOUND_ENABLED = os.getenv("SOUND_ENABLED", "true").lower() in ("true", "1", "yes")

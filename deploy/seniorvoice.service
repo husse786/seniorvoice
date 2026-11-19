@@ -6,7 +6,7 @@
 
 [Unit]
 Description=SeniorVoice telephone (core + dialog)
-After=network-online.target sound.target ollama.service
+After=network-online.target wg-quick@wg0.service sound.target ollama.service
 Wants=network-online.target ollama.service
 
 [Service]
@@ -14,10 +14,14 @@ Type=simple
 User=pi
 SupplementaryGroups=gpio audio
 WorkingDirectory=/home/pi/seniorvoice/pipeline
+# Telephone wired: gpio. Before that (or for a demo without the telephone):
+# SENIORVOICE_INPUT=web in .env, the phone page then comes up on SIM_PHONE_HOST
+# (docs/pi-einrichten.md). Values from .env win over this line.
+Environment=SENIORVOICE_INPUT=gpio
 EnvironmentFile=-/home/pi/seniorvoice/.env
 # piper is installed into the virtualenv and found via PATH
 Environment=PATH=/home/pi/seniorvoice/.venv/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/pi/seniorvoice/.venv/bin/python core_service.py --input gpio
+ExecStart=/home/pi/seniorvoice/.venv/bin/python core_service.py
 Restart=always
 RestartSec=5
 # Logs go to the journal; conversation text is never logged (A8)

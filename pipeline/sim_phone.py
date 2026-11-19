@@ -15,6 +15,7 @@ Shown sentences live in RAM only and are cleared when the handset is hung up
 """
 
 import collections
+import ipaddress
 import json
 import threading
 import time
@@ -105,6 +106,10 @@ class SimPhone(InputSource):
         return state
 
     def start(self, events) -> None:
+        address = ipaddress.ip_address(self.host)      # ValueError for names
+        if address.is_unspecified:
+            raise ValueError("SIM_PHONE_HOST: 127.0.0.1 or the WireGuard address, "
+                             "not all interfaces")
         self.events = events
         phone = self
 
@@ -133,7 +138,7 @@ class _Handler(BaseHTTPRequestHandler):
     def _host_ok(self) -> bool:
         # Against DNS rebinding: only requests addressed to this computer
         host = self.headers.get("Host", "").rsplit(":", 1)[0].strip("[]")
-        return host in ("127.0.0.1", "localhost", "::1")
+        return host in ("127.0.0.1", "localhost", "::1", self.sim.host)
 
     def _send(self, status: int, body: bytes, content_type: str) -> None:
         self.send_response(status)

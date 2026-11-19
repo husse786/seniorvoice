@@ -224,6 +224,38 @@ def test_phone_refuses_other_web_pages(phone):
     assert phone.events.empty()
 
 
+def test_phone_page_never_on_all_interfaces(env):
+    sim_phone = env.load("sim_phone")
+    for host in ("0.0.0.0", "::", "my-pi.local"):
+        with pytest.raises(ValueError):
+            sim_phone.SimPhone(0, host=host).start(queue.Queue())
+
+
+def test_phone_page_on_tunnel_address_accepts_that_host(env):
+    # On the Pi the page listens on its WireGuard address; 127.0.0.2 stands in
+    sim_phone = env.load("sim_phone")
+    p = sim_phone.SimPhone(0, host="127.0.0.2")
+    p.start(queue.Queue())
+    try:
+        port = p.server.server_address[1]
+        req = urllib.request.Request(f"http://127.0.0.2:{port}/state")
+        req.add_header("X-Sim-Phone", "1")
+        with _opener().open(req, timeout=5) as resp:
+            assert resp.status == 200
+        req = urllib.request.Request(f"http://127.0.0.2:{port}/state")
+        req.add_header("Host", "evil.example")
+        with pytest.raises(urllib.error.HTTPError):
+            _opener().open(req, timeout=5)
+    finally:
+        p.stop()
+
+
+def test_input_from_environment(env):
+    assert env.load("config").SENIORVOICE_INPUT == "keyboard"
+    env.set(SENIORVOICE_INPUT="web")
+    assert env.load("config").SENIORVOICE_INPUT == "web"
+
+
 def test_typed_text_only_during_a_call_and_forgotten_on_hang_up(phone):
     assert phone("POST", "/say", {"text": "Hallo"})[0] == 400          # not lifted
     phone.state["in_call"] = True
