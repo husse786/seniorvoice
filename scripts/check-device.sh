@@ -34,7 +34,7 @@ else
   if MICS="$("$PY" -c 'import sounddevice as sd; print("\n".join(d["name"] for d in sd.query_devices() if d["max_input_channels"] > 0))' 2>/dev/null)"; then
     if [ -z "$MICS" ]; then bad "kein Mikrofon gefunden"
     elif [ -n "${AUDIO_DEVICE_NAME:-}" ] && ! echo "$MICS" | grep -qi -- "$AUDIO_DEVICE_NAME"; then
-      bad "Mikrofon «$AUDIO_DEVICE_NAME» nicht gefunden. Vorhanden: $(echo "$MICS" | paste -sd ',' -)"
+      warn "Mikrofon «$AUDIO_DEVICE_NAME» nicht gefunden, die Simulation nimmt das Standard-Mikrofon. Vorhanden: $(echo "$MICS" | paste -sd ',' -)"
     else ok "Mikrofon: $(echo "$MICS" | grep -i -m1 -- "${AUDIO_DEVICE_NAME:-.}")"; fi
   else
     bad "sounddevice nicht nutzbar (libportaudio2 installiert?)"
@@ -43,7 +43,7 @@ fi
 
 echo "Verbindung zum Portal"
 TOKEN_HASH="${DEVICE_API_TOKEN_SHA256:-}"
-[[ "$TOKEN_HASH" =~ ^[0-9a-f]{64}$ ]] && ok "Gerätetoken eingerichtet" || bad "DEVICE_API_TOKEN_SHA256 fehlt (python pipeline/device_api_cli.py token)"
+[[ "$TOKEN_HASH" =~ ^[0-9a-f]{64}$ ]] && ok "Gerätetoken eingerichtet" || bad "DEVICE_API_TOKEN_SHA256 fehlt (scripts/demo-personen.sh oder python pipeline/device_api_cli.py token)"
 HOST="${DEVICE_API_HOST:-127.0.0.1}"; PORT="${DEVICE_API_PORT:-8770}"
 if command -v wg >/dev/null && [ "$(uname)" = "Linux" ]; then
   if ip -4 addr show wg0 2>/dev/null | grep -q "inet "; then

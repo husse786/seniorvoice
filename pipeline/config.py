@@ -92,9 +92,12 @@ AUDIT_RETENTION_DAYS = int(os.getenv("AUDIT_RETENTION_DAYS", "30"))
 # SIM_AUDIO=text: the senior's words are typed on the simulated phone page and
 # the device's answers are shown there instead of spoken (no microphone, no
 # speaker needed). Default "audio": microphone and speaker as on the device.
-SIM_AUDIO = os.getenv("SIM_AUDIO", "audio").strip().lower()
-if SIM_AUDIO not in ("audio", "text"):
-    SIM_AUDIO = "audio"
+# Default "auto": the simulation checks at start whether microphone, Whisper
+# and Piper are there and uses sound if so, otherwise text only (the phone
+# page says why). Typing always works in addition. "text" forces text only.
+SIM_AUDIO = os.getenv("SIM_AUDIO", "auto").strip().lower()
+if SIM_AUDIO not in ("audio", "text", "auto"):
+    SIM_AUDIO = "auto"
 # Page of the simulated phone; always bound to 127.0.0.1 (this computer only)
 SIM_PHONE_PORT = int(os.getenv("SIM_PHONE_PORT", "8771"))
 # Where the simulated phone page listens. 127.0.0.1 = only this computer. On a
@@ -104,6 +107,11 @@ SIM_PHONE_HOST = os.getenv("SIM_PHONE_HOST", "127.0.0.1").strip()
 # Input when core_service.py is started without --input (systemd unit: gpio;
 # on the Pi before the telephone is wired: web)
 SENIORVOICE_INPUT = os.getenv("SENIORVOICE_INPUT", "keyboard").strip().lower()
+
+# Screen on the device (T11, 7" display only): a page on 127.0.0.1 that the
+# Pi's browser shows in kiosk mode; the simulated phone shows the same page
+SCREEN_ENABLED = os.getenv("SCREEN_ENABLED", "true").lower() in ("true", "1", "yes")
+SCREEN_PORT = int(os.getenv("SCREEN_PORT", "8772"))
 
 # Texts the team edits without touching code: persona (system prompt) and
 # the building blocks of the greeting spoken when the handset is lifted

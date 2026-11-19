@@ -1,6 +1,6 @@
 # Simuliertes Gerät (Mac oder Pi)
 
-Status: Entwurf, in der Cloud-Testumgebung durchgespielt (Textmodus, Termin aus der Geräte-API klingelt, Abheben bestätigt). Auf einem Mac und auf dem Pi noch nicht geprüft.
+Status: Entwurf. In der Cloud-Testumgebung durchgespielt (nur Tippen, ohne Ton). Ton auf dem Mac und Betrieb auf dem Pi noch nicht geprüft.
 
 ## Wozu
 
@@ -8,20 +8,22 @@ Solange das Telefon (Gabel, Knöpfe, Hörer) nicht zusammengebaut ist, läuft di
 
 | Echt am Telefon | In der Simulation |
 |---|---|
-| Gabelschalter und 6 Knöpfe (GPIO) | Telefon-Seite im Browser: `http://127.0.0.1:8771` |
-| Hörer und Raumlautsprecher | Mikrofon und Lautsprecher des Rechners, **oder** Textmodus |
-| Handy der Help-Kontaktperson | Feld «Kontakt-Handy» auf der Telefon-Seite mit Knopf «Ich kümmere mich» |
+| Gabelschalter und 6 Knöpfe (GPIO) | Gezeichnetes Telefon im Browser: `http://127.0.0.1:8771`. Hörer anklicken zum Abheben, Tasten drücken |
+| 7"-Bildschirm am Gerät | Derselbe Bildschirm, ins gezeichnete Telefon eingesetzt |
+| Hörer und Raumlautsprecher | Mikrofon und Lautsprecher des Rechners, dazu immer ein Tippfeld |
+| Handy der Hilfe-Kontaktperson | Meldungen im Gesprächsfeld, Knopf «Ich kümmere mich» |
 
 Alles andere ist derselbe Code wie später am Telefon: Kern und Gesprächsprozess (A12), Erinnerungen mit Klingeln (A5/A6), Help mit Eskalation (A13/A14), Rat (B2), Gedächtnis mit 7-Tage-Frist (A8), Geräte-API für das Portal (B4) und die Messwerte für den Gerätezustand.
 
 Derselbe Code läuft auf dem Pi (`docs/pi-einrichten.md`): Dort startet ihn der Dienst mit `SENIORVOICE_INPUT=web`, bis Gabel und Knöpfe verdrahtet sind; danach mit `gpio`.
 
-## Zwei Betriebsarten
+## Sprechen und Tippen
 
-- **Ton** (`SIM_AUDIO=audio`, Standard): Sprechen ins Mikrofon, Antworten aus dem Lautsprecher. Braucht Whisper und Piper.
-- **Text** (`SIM_AUDIO=text`): Tippen statt Sprechen, Antworten als Text auf der Seite. Braucht weder Mikrofon noch Lautsprecher, nur das Sprachmodell. Gut für Präsentationen im Raum und als Rückfall, falls der Ton nicht klappt.
+Es gibt nichts umzustellen. **Sprechen und Tippen gehen immer gleichzeitig.** Ein getippter Satz ersetzt die nächste gesprochene Antwort. Was das Gerät sagt, ist zu hören und steht zusätzlich als Text da.
 
-Datenschutz wie am Gerät: Getippter Text und Antworten stehen nur im Arbeitsspeicher und verschwinden beim Auflegen von der Seite. Nichts davon kommt in eine Datei, ein Log oder die Messwerte (A8, F1). Die Telefon-Seite ist nur von diesem Rechner aus erreichbar (127.0.0.1).
+Beim Start prüft die Simulation selbst, ob Mikrofon, Whisper und Piper da sind. Fehlt etwas, läuft sie nur mit Tippen weiter, und auf der Seite steht, was fehlt. Ist das Mikrofon aus `.env` (die Webcam C920 des Pi) nicht da, nimmt sie das eingebaute Mikrofon. Hört das Mikrofon nichts, erscheint ein Hinweis im Gesprächsfeld.
+
+Datenschutz wie am Gerät: Gesprochenes, Getipptes und Antworten stehen nur im Arbeitsspeicher und verschwinden beim Auflegen von der Seite und vom Bildschirm. Nichts davon kommt in eine Datei, ein Log oder die Messwerte (A8, F1). Durchsagen über den Lautsprecher und Meldungen an die Kontaktperson bleiben im Gesprächsfeld stehen, bis die Simulation neu startet. Die Seite ist nur von diesem Rechner aus erreichbar (127.0.0.1).
 
 ## Einrichten auf dem Mac (einmal)
 
@@ -29,59 +31,41 @@ Datenschutz wie am Gerät: Getippter Text und Antworten stehen nur im Arbeitsspe
    ```bash
    ollama pull gemma3:1b
    ```
-2. Code und virtuelle Umgebung:
+2. Code, virtuelle Umgebung und Stimme:
    ```bash
    git clone https://github.com/husse786/seniorvoice.git && cd seniorvoice
    python3 -m venv .venv && . .venv/bin/activate
-   pip install -r pipeline/requirements.txt
-   ```
-3. Nur für den Ton-Modus: Stimme für Piper (Piper ist ab Version 1.8 auch für Apple-Chips als fertiges Paket verfügbar):
-   ```bash
-   pip install piper-tts
+   pip install -r pipeline/requirements.txt piper-tts
    python -m piper.download_voices --data-dir ~/.local/share/piper-voices de_DE-thorsten-medium
    ```
-   Beim ersten Start fragt macOS, ob das Terminal das Mikrofon benutzen darf: erlauben.
-4. Konfiguration und Gerätetoken:
+3. Demo-Personen anlegen (Frau Keller, Sandra Keller, Projektteam, Gerätetoken, Freigaben, Hilfe-Kontakt, Beispieltermine, Portal-Konten):
    ```bash
-   cp .env.example .env
-   cd pipeline && python device_api_cli.py token
+   scripts/demo-personen.sh
    ```
-   Die ausgegebene Zeile `DEVICE_API_TOKEN_SHA256=…` in `.env` eintragen. Den Token selbst für das Portal aufheben. In `.env` zusätzlich:
-   ```
-   AUDIO_DEVICE_NAME=
-   SENIOR_NAME="Frau Keller"
-   ```
-   (`AUDIO_DEVICE_NAME` leer = eingebautes Mikrofon. Werte mit Leerzeichen in Anführungszeichen.) Ohne weitere Angabe läuft die Simulation mit Ton, wie das echte Gerät. Nur als Rückfall, wenn Mikrofon oder Lautsprecher nicht klappen, zusätzlich `SIM_AUDIO=text` eintragen.
-5. Freigaben für das Portal (wie am echten Gerät mit Zustimmung der Seniorin/des Seniors):
-   ```bash
-   python device_api_cli.py grant sandra.keller "Sandra Keller" angehoerige --help-visible --senior-consent
-   python device_api_cli.py grant admin.team "Projektteam" admin --senior-consent
-   ```
-6. Help-Kontakt eintragen (sonst sagt das Gerät nach dem Help-Knopf sofort «Bitte rufen Sie 144 an»):
-   ```bash
-   python contacts_cli.py set "Sandra Keller|Tochter|Sandra" "Spitex Winterthur|Spitex|Spitex"
-   ```
-   Im Testkanal `console` ist die Adresse nur eine Bezeichnung.
+   Fragt pro Portal-Konto ein Passwort und zeigt den Code-Schlüssel für die Authenticator-App einmal an. Beides gleich sichern, zum Beispiel in der Passwörter-App des Mac. Das Skript darf mehrfach laufen. Was schon da ist, bleibt unverändert.
+4. Mikrofon freigeben: macOS fragt beim ersten Start, ob das Terminal das Mikrofon benutzen darf. Erlauben. Falls verpasst: Systemeinstellungen, Datenschutz & Sicherheit, Mikrofon, Terminal einschalten.
 
 ## Starten
 
 ```bash
-scripts/start-simulation.sh                  # Modus aus .env
-SIM_AUDIO=text scripts/start-simulation.sh   # Textmodus für diesen Start
+scripts/start-simulation.sh
+scripts/start-portal.sh        # zweites Terminal
 ```
 
-Dann `http://127.0.0.1:8771` im Browser öffnen. Beenden mit Ctrl+C.
+Dann `http://127.0.0.1:8771` (Telefon) und `http://127.0.0.1:8780` (Portal) im Browser öffnen. Beenden mit Ctrl+C.
+
+Nur Tippen erzwingen, zum Beispiel in einem lauten Raum: `SIM_AUDIO=text scripts/start-simulation.sh`.
 
 ## Demo-Ablauf (Z7: Termin im Portal kommt am Gerät an)
 
 1. Portal öffnen (`docs/portal.md`) und als Angehörige einen Termin in 2 Minuten eintragen.
-2. Zur vollen Minute klingelt die Telefon-Seite («Es klingelt – bitte abheben»), im Ton-Modus auch hörbar.
-3. «Hörer abheben»: das Gerät sagt die Erinnerung an. Ohne fällige Erinnerung begrüsst es stattdessen mit Namen, nennt den nächsten Termin von heute und stellt eine kleine Frage (Texte: `docs/begruessung-und-persona.md`).
+2. Zur vollen Minute klingelt das Telefon: Der Hörer wackelt, der Bildschirm zeigt die Erinnerung, der Klingelton ist hörbar.
+3. Hörer anklicken: Er hebt sich ab, und das Gerät sagt die Erinnerung an. Ohne fällige Erinnerung begrüsst es stattdessen mit Namen, nennt den nächsten Termin von heute und stellt eine kleine Frage (Texte: `docs/begruessung-und-persona.md`).
 4. Im Portal steht beim Termin jetzt «bestätigt».
-5. «Hilfe» drücken: im Feld Kontakt-Handy erscheint die Meldung an die Kontaktperson; «Ich kümmere mich» schliesst den Alarm, das Gerät bestätigt laut.
+5. «Hilfe» drücken: Der Bildschirm zeigt, wer benachrichtigt wird, im Gesprächsfeld steht die Meldung an die Kontaktperson. «Ich kümmere mich» schliesst den Alarm, das Gerät bestätigt laut.
 
 ## Was die Simulation nicht zeigt
 
 - Echte Latenzen des Pi: Ein Mac rechnet deutlich schneller. Werte für die Präsentation oder den Bericht nur vom Pi nehmen.
 - Gabel und Knöpfe als Hardware (Entprellung, Verdrahtung): getestet nur mit Software-Tests (`tests/test_telephone_hardware.py`).
-- Zustellung über Telegram: Die Simulation nutzt den Testkanal `console` (F4 offen).
+- Zustellung per E-Mail: Die Simulation nutzt den Testkanal `console`. Echte Mails: `docs/email-kanal.md`.

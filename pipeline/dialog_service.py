@@ -94,7 +94,16 @@ class DialogService:
             return sim_text.wait_input(self.active, timeout=MAX_RECORD_SECONDS)
         import audio_capture
         import stt
-        return stt.transcribe(audio_capture.record_until_silence())
+        typed = sim_text.take_input()
+        if typed:
+            return typed
+        wav = audio_capture.record_until_silence()
+        typed = sim_text.take_input()
+        if typed:
+            return typed
+        text = stt.transcribe(wav)
+        sim_text.heard(text)              # shown on the screen (RAM only)
+        return text
 
     # --- conversation ---
 
@@ -336,9 +345,10 @@ class DialogService:
         from memory import PurgeService
 
         import sim_text
-        if sim_text.enabled():
-            # Sentences go to the phone page via the core (never to a file)
-            sim_text.set_sink(lambda text, output: self.bus.send("sim_say", text=text, output=output))
+        # Sentences go to the screen and phone page via the core (RAM only,
+        # never to a file); in audio mode they are spoken as well
+        sim_text.set_sink(lambda text, output: self.bus.send("sim_say", text=text, output=output))
+        sim_text.set_heard_sink(lambda text: self.bus.send("sim_heard", text=text))
         self.bus.listen(self.on_message, name="core-bus")
         # Histories whose note extraction failed wait in this process's RAM;
         # expire them here too (the core's purge cannot reach this process).

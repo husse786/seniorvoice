@@ -3,8 +3,8 @@
 # Geräte-API für das Portal und das Telefon (Kern + Gespräch) mit der
 # Telefon-Seite im Browser statt Gabel und Knöpfen. Anleitung: docs/simulation.md
 #
-#   scripts/start-simulation.sh            Ton über Mikrofon und Lautsprecher (SIM_AUDIO aus .env)
-#   SIM_AUDIO=text scripts/start-simulation.sh   tippen statt sprechen
+#   scripts/start-simulation.sh            sprechen und tippen (Ton automatisch, wenn vorhanden)
+#   SIM_AUDIO=text scripts/start-simulation.sh   nur tippen
 #
 # Beenden mit Ctrl+C (stoppt beide Dienste).
 set -euo pipefail
@@ -25,12 +25,12 @@ API_PID=$!
 trap 'kill "$API_PID" 2>/dev/null || true' EXIT INT TERM
 sleep 1
 if ! kill -0 "$API_PID" 2>/dev/null; then
-  echo "Geräte-API startet nicht: DEVICE_API_TOKEN_SHA256 in .env gesetzt? (docs/simulation.md, Schritt 4)" >&2
+  echo "Geräte-API startet nicht: zuerst scripts/demo-personen.sh ausführen (docs/simulation.md, Schritt 3)" >&2
   exit 1
 fi
 echo
 echo "  Simuliertes Telefon:  http://127.0.0.1:${SIM_PHONE_PORT:-8771}"
 echo "  Geräte-API:           ${DEVICE_API_HOST:-127.0.0.1}:${DEVICE_API_PORT:-8770}"
-echo "  Modus:                ${SIM_AUDIO:-audio}"
+echo "  Ton:                  ${SIM_AUDIO:-auto} (auto = wenn Mikrofon und Stimme da sind)"
 echo
 "$PY" core_service.py --input web

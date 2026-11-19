@@ -1,4 +1,11 @@
-"""Text mode of the simulated telephone (SIM_AUDIO=text).
+"""Text on the telephone: typed input and the shown conversation.
+
+Text mode (SIM_AUDIO=text) is for demos and tests without microphone and
+speaker. In the normal audio mode a sentence can still be typed on the
+simulated phone page (it replaces the next spoken answer), and what is said
+is shown as text on the device screen and the phone page (screen.py).
+
+Original description of the text mode (SIM_AUDIO=text):
 
 For demos and tests without microphone and speaker: what the senior says is
 typed on the simulated phone page, and what the device would say is shown
@@ -18,6 +25,7 @@ import time
 from typing import Callable
 
 _sink: Callable[[str, str], None] | None = None
+_heard_sink: Callable[[str], None] | None = None
 _inbox: "queue.Queue[str]" = queue.Queue()
 
 
@@ -31,10 +39,41 @@ def set_sink(sink: Callable[[str, str], None] | None) -> None:
     _sink = sink
 
 
+def set_heard_sink(sink: Callable[[str], None] | None) -> None:
+    global _heard_sink
+    _heard_sink = sink
+
+
 def show(text: str, output: str = "handset") -> None:
-    """Instead of speaking: hand the sentence to the phone page."""
+    """What the device says, as text for the screen and the phone page
+    (in text mode instead of speaking, in audio mode in addition)."""
     if _sink is not None:
-        _sink(text, output)
+        try:
+            _sink(text, output)
+        except Exception:
+            pass                      # the screen must never break speaking
+
+
+def heard(text: str) -> None:
+    """What the senior said (speech recognition), for the screen (RAM only)."""
+    if _heard_sink is not None and text.strip():
+        try:
+            _heard_sink(text)
+        except Exception:
+            pass
+
+
+def has_input() -> bool:
+    """A typed sentence is waiting (ends a running recording early)."""
+    return not _inbox.empty()
+
+
+def take_input() -> str:
+    """The waiting typed sentence, or "" (never blocks)."""
+    try:
+        return _inbox.get_nowait()
+    except queue.Empty:
+        return ""
 
 
 def put_input(text: str) -> None:

@@ -328,6 +328,16 @@ class HelpService:
         self._stop.set()
         self._wake.set()
 
+    def screen_status(self) -> dict | None:
+        """Who was told, for the device screen (A13). None if no alert runs."""
+        with self._lock:
+            active = self._active
+            if active is None:
+                return {"kontakt": "", "rolle": "", "zugestellt": False} if self._requested else None
+            contact = active["contacts"][active["pos"]]
+            return {"kontakt": contact.get("name", ""), "rolle": contact.get("role", ""),
+                    "zugestellt": bool(active.get("delivered"))}
+
     def is_open(self) -> bool:
         """An alert is running (shown on the simulated phone page)."""
         with self._lock:

@@ -93,8 +93,8 @@ def speak(text: str, output: str = "handset") -> None:
     page instead (sim_text.py).
     """
     import sim_text
+    sim_text.show(text, output)       # as text for the screen (RAM only)
     if sim_text.enabled():
-        sim_text.show(text, output)
         return
     wav_path = synthesize(text)
     try:
