@@ -80,7 +80,9 @@ def test_cancelled_help_is_shown_briefly(env):
         "kontakt": "", "rolle": "", "zugestellt": False, "phase": "abgebrochen", "rest": 0})
     got = s.state()
     assert got["modus"] == "hilfe" and got["hilfe"]["phase"] == "abgebrochen"
-    state.update(help_phase=None)
+    state.update(ringing=True)                          # a reminder rings: it goes first
+    assert s.state()["modus"] == "klingelt"
+    state.update(ringing=False, help_phase=None)
     assert s.state()["modus"] == "ruhe"
 
 

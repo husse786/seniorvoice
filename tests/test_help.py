@@ -268,6 +268,7 @@ def test_second_press_within_window_cancels_and_nobody_is_told(help_env):
 
 
 def test_quick_panic_presses_do_not_cancel(help_env):
+    """Presses less than 2 s apart are ignored."""
     help_mod, service, channel, clock, said = help_env
     service.trigger()
     service.trigger()                                   # before the worker even ran
@@ -402,8 +403,8 @@ def test_worker_sends_on_time_without_a_further_press(env):
     help_mod.set_contacts([{"name": "Sandra", "role": "Tochter", "address": "x"}])
     channel = channels.ConsoleChannel()
     service = help_mod.HelpService(channel, announce=lambda t: None)
-    original = help_mod.CANCEL_SECONDS
-    help_mod.CANCEL_SECONDS = 0.3
+    original = help_mod.CANCEL_SECONDS, help_mod.CANCEL_MIN_WINDOW_SECONDS
+    help_mod.CANCEL_SECONDS, help_mod.CANCEL_MIN_WINDOW_SECONDS = 0.3, 0.1
     try:
         service.run_worker(interval=5.0)
         service.trigger()
@@ -412,5 +413,92 @@ def test_worker_sends_on_time_without_a_further_press(env):
             time.sleep(0.02)
         assert channel.sent                              # did not wait for the 5 s interval
     finally:
-        help_mod.CANCEL_SECONDS = original
+        help_mod.CANCEL_SECONDS, help_mod.CANCEL_MIN_WINDOW_SECONDS = original
         service.stop()
+
+
+def test_press_while_alert_is_being_created_cancels_it(help_env, monkeypatch):
+    """Review PR #17: the database is slow (locked by the portal) while the
+    alert is created, and the second press comes in during that time."""
+    help_mod, service, channel, clock, said = help_env
+    real = help_mod.get_contacts
+
+    def slow_contacts():
+        clock.advance(3)
+        service.trigger()                               # second press, 3 s after the first
+        return real()
+    monkeypatch.setattr(help_mod, "get_contacts", slow_contacts)
+    service.trigger()
+    service.step()
+    assert said[-1] == help_mod.SAY_CANCELLED
+    clock.advance(30)
+    service.step()
+    assert channel.sent == []
+    assert [a["status"] for a in help_mod.list_alerts()] == ["abgebrochen"]
+
+
+def test_double_press_while_alert_is_being_created_makes_one_alert(help_env, monkeypatch):
+    help_mod, service, channel, clock, said = help_env
+    real = help_mod.get_contacts
+
+    def slow_contacts():
+        clock.advance(0.3)
+        service.trigger()                               # bounce / double tap: ignored
+        return real()
+    monkeypatch.setattr(help_mod, "get_contacts", slow_contacts)
+    service.trigger()
+    service.step()
+    clock.advance(help_mod.CANCEL_SECONDS)
+    service.step()
+    assert len(channel.sent) == 1
+    assert [a["status"] for a in help_mod.list_alerts()] == ["offen"]
+
+
+def test_panic_burst_running_past_two_seconds_does_not_cancel(help_env):
+    help_mod, service, channel, clock, said = help_env
+    for _ in range(8):                                  # pressing every 0.7 s for 5 s
+        service.trigger()
+        service.step()
+        clock.advance(0.7)
+    assert help_mod.SAY_CANCELLED not in said
+    clock.advance(help_mod.CANCEL_SECONDS)
+    service.step()
+    assert [s[0] for s in channel.sent] == ["chat-sandra"]
+
+
+def test_quick_press_after_cancel_does_not_toggle(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    service.step()
+    clock.advance(3)
+    service.trigger()
+    service.step()                                      # cancelled
+    clock.advance(0.3)
+    service.trigger()                                   # double tap on cancel: ignored
+    service.step()
+    assert said[-1] == help_mod.SAY_CANCELLED and channel.sent == []
+    clock.advance(3)
+    service.trigger()                                   # deliberate press: goes out at once
+    service.step()
+    assert [s[0] for s in channel.sent] == ["chat-sandra"]
+
+
+def test_late_worker_still_leaves_time_to_cancel(help_env, monkeypatch):
+    """Worker busy (e.g. mail poll) for 11 s: the announcement still gives time."""
+    help_mod, service, channel, clock, said = help_env
+    service.step()                                      # startup done
+    service.trigger()
+    clock.advance(11)                                   # worker picks it up late
+    service.step()
+    assert said[-1] == help_mod.SAY_HOLD.format(name="Sandra") and channel.sent == []
+    clock.advance(3)
+    service.trigger()
+    service.step()
+    assert said[-1] == help_mod.SAY_CANCELLED and channel.sent == []
+
+
+def test_countdown_while_request_waits_for_worker(help_env):
+    help_mod, service, channel, clock, said = help_env
+    service.trigger()
+    clock.advance(4)
+    assert service.screen_status()["rest"] == 6

@@ -125,12 +125,15 @@ class Screen:
                        else None)
         ringing = bool(phone.get("ringing"))
         in_call = bool(phone.get("in_call"))
-        if help_status is not None or phone.get("help_open"):
+        cancelled = phone.get("help_phase") == "abgebrochen" and not phone.get("help_open")
+        if phone.get("help_open") or (help_status is not None and not cancelled):
             mode = "hilfe"
         elif ringing:
             mode = "klingelt"
         elif in_call:
             mode = "gespraech"
+        elif cancelled and help_status is not None:
+            mode = "hilfe"          # "Abgebrochen" only while nothing else is shown
         else:
             mode = "ruhe"
         reminder = ""
