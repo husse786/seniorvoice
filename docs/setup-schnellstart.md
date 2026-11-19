@@ -87,6 +87,8 @@ Das M.2 HAT+ und die SSD bleiben in der Packung.
 
 Alles als Benutzer `pi`, im SSH-Fenster. Für diesen Schritt braucht der Pi Internet (Programme, Modelle). Danach läuft alles lokal.
 
+**Kurzweg:** Nach `git clone` (unten) erledigt `scripts/pi-einrichten.sh` die Schritte 4 und 5.3 samt Dienste, Bildschirm und Hardwareerkennung ([pi-einrichten.md](pi-einrichten.md), Schritt 0). Die Befehle hier zeigen, was dabei passiert.
+
 ```bash
 # Programme
 sudo apt install -y git python3-venv python3-lgpio alsa-utils libportaudio2

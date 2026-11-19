@@ -1,12 +1,33 @@
 # Pi 5 als Gerät am Portal einrichten
 
-Status: Entwurf, noch nicht auf dem Pi durchgespielt. Der Code ist derselbe wie in der Simulation auf dem Mac (`docs/simulation.md`), die dort getestet ist.
+Status: Entwurf, noch nicht auf dem Pi durchgespielt (Einrichtungsskript und Hardwareerkennung in der Cloud mit Testdaten geprüft). Der Code ist derselbe wie in der Simulation auf dem Mac (`docs/simulation.md`), die dort getestet ist.
 
 Ziel: Der Pi ist das echte Gerät, das Portal läuft auf dem Team-Laptop, beide sind per WireGuard verbunden. Solange Hörer, Gabel und Knöpfe nicht verdrahtet sind, bedient man das Gerät über die Telefon-Seite im Browser des Laptops; Mikrofon und Ton laufen aber schon am Pi.
 
 ## Voraussetzung
 
-[setup-schnellstart.md](setup-schnellstart.md) Schritte 1 bis 6 sind erledigt: Pi läuft, SeniorVoice ist installiert, `core_service.py` antwortet im Terminal.
+[setup-schnellstart.md](setup-schnellstart.md) Schritte 1 bis 3 sind erledigt: Raspberry Pi OS **Lite** (64 bit) läuft, SSH geht, der Code liegt in `~/seniorvoice`.
+
+## 0. Einrichten mit einem Befehl (auf dem Pi)
+
+```bash
+cd ~/seniorvoice && scripts/pi-einrichten.sh
+```
+
+Das Skript installiert Programme, Python-Pakete, Sprachmodell und Stimme, legt `.env` an, erkennt die angeschlossene Hardware und trägt sie ein, richtet die Dienste ein (Telefon, Geräte-API, Bildschirm) und macht am Ende den Selbsttest. Es darf beliebig oft laufen, zum Beispiel nach jedem neuen Teil. `scripts/pi-einrichten.sh --trocken` zeigt nur, was es tun würde.
+
+Was es erkennt (`scripts/hardware_erkennen.py`, allein aufrufbar):
+
+| Teil | Erkannt an | Eintrag in `.env` |
+|---|---|---|
+| GPIO-Chip des Pi 5 | `gpiodetect`, Zeile `pinctrl-rp1` | `GPIO_CHIP` |
+| Hörer und Raumlautsprecher | Tonkarten «handset» und «speaker» (udev-Regel, [inbetriebnahme-telefon.md](inbetriebnahme-telefon.md) 4.3); vorher eine einzelne USB-Tonkarte für beides | `HANDSET_ALSA_DEVICE`, `SPEAKER_ALSA_DEVICE` |
+| Webcam-Mikrofon | Tonkarte «C920» | `AUDIO_DEVICE_NAME` |
+| Bildschirm | Touch Display 2 am DSI-Anschluss oder HDMI | Bildschirm-Dienst an |
+
+Werte, die jemand in `.env` selbst gesetzt hat, ändert es nie; es meldet nur, was es erkannt hätte. Gabel und Knöpfe lassen sich nicht automatisch erkennen: Prüfung von Hand in [inbetriebnahme-telefon.md](inbetriebnahme-telefon.md) 4.2.
+
+Danach fehlen nur noch die Schritte, die eine Zustimmung oder den Laptop brauchen: 1 (Token, Freigaben), 2 (Tunnel) und 4 (Portal).
 
 ## 1. Gerätetoken und Freigaben (auf dem Pi)
 
@@ -42,25 +63,23 @@ SIM_PHONE_HOST=10.77.0.2
 ```
 (Sobald Gabel und Knöpfe verdrahtet sind: beide Zeilen löschen. Dann gilt `gpio` aus dem Dienst.)
 
+Die Dienste richtet `scripts/pi-einrichten.sh` ein (Schritt 0), passend zum Benutzernamen und Ordner. Nach einer Änderung an `.env` oder dem Gerätetoken das Skript nochmals laufen lassen oder neu starten:
 ```bash
-cd ~/seniorvoice
-sudo cp deploy/seniorvoice.service deploy/seniorvoice-api.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now seniorvoice-api seniorvoice
+sudo systemctl restart seniorvoice seniorvoice-api
 journalctl -u seniorvoice -f       # Ctrl+C beendet nur die Anzeige
 ```
 
-## 3a. Bildschirm (7"-Display, T11)
+## 3a. Bildschirm (Touch Display 2, T11)
 
 Das Gerät zeigt auf `http://127.0.0.1:8772` dieselbe Bildschirm-Seite wie das gezeichnete Telefon in der Simulation: Uhr, Termine von heute, Erinnerung beim Klingeln, das laufende Gespräch und den Hilfe-Status. Die Seite ist nur auf dem Pi selbst erreichbar und nur zum Anschauen, ohne Bedienung.
 
-Der Browser des Pi zeigt sie nach dem Anmelden im Vollbild. In `~/.config/labwc/autostart` (Raspberry Pi OS mit Desktop, labwc):
-```
-chromium-browser --kiosk --noerrdialogs --disable-infobars --incognito http://127.0.0.1:8772/ &
-```
-(Heisst das Programm auf dem Pi `chromium`, den Namen anpassen.) Ohne Bildschirm: `SCREEN_ENABLED=false` in `.env`.
+Dafür braucht es **keinen Desktop**. Der Dienst `seniorvoice-screen` startet auf Raspberry Pi OS Lite den Kiosk-Fenstermanager **cage** und darin Chromium im Vollbild (`scripts/bildschirm-kiosk.sh`). `scripts/pi-einrichten.sh` installiert beides und schaltet den Dienst ein, sobald ein Bildschirm angeschlossen ist.
 
-Noch nicht auf dem Pi geprüft. Datenschutz: Während eines Gesprächs stehen die letzten Sätze auf dem Bildschirm. Wer daneben sitzt, kann mitlesen. Beim Auflegen sind sie weg.
+- **Strom:** Das Touch Display 2 bekommt Strom über die Stiftleiste, Stift 2 (5 V, rot) und Stift 6 (GND, schwarz), laut Raspberry-Pi-Doku. Das Flachkabel kommt an den DSI-Anschluss des Pi. Der Pi erkennt das Display von selbst.
+- **Quer statt hochkant:** Das Display ist von Haus aus hochkant. Der Kiosk dreht es mit `SCREEN_ROTATE=90` (Standard). Steht das Bild auf dem Kopf: `SCREEN_ROTATE=270` in `.env`, dann `sudo systemctl restart seniorvoice-screen`.
+- **Ohne Bildschirm:** Der Dienst bleibt aus, das Gerät läuft normal. Ganz abschalten: `SCREEN_ENABLED=false` in `.env`.
+
+Noch nicht auf dem Pi geprüft (Display noch nicht gekauft). Datenschutz: Während eines Gesprächs stehen die letzten Sätze auf dem Bildschirm. Wer daneben sitzt, kann mitlesen. Beim Auflegen sind sie weg. Chromium läuft ohne Verlauf und Cache auf der Karte.
 
 ## 4. Portal auf dem Mac
 

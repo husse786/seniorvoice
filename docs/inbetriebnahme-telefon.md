@@ -11,7 +11,7 @@ Ziel: Wenn die Teile da sind, nur noch verkabeln, Prüfbefehle laufen lassen, `.
 | Teil | Erwartung im Code | Einstellung |
 |---|---|---|
 | Gabelschalter | Schalter zwischen GPIO und GND, interner Pull-up. Abgehoben = HIGH | `HOOK_GPIO_PIN`, `HOOK_OFFHOOK_LEVEL` |
-| 6 Knöpfe | je Knopf ein Taster zwischen GPIO und GND, interner Pull-up. Gedrückt = LOW, ausgelöst beim Drücken | `BUTTON_PINS` |
+| 6 Knöpfe | je Knopf ein Taster zwischen GPIO und GND, interner Pull-up. Gedrückt = LOW, ausgelöst beim Drücken. «Sprechen»: Gerät hört sofort auf zu reden und hört zu, nach einer Pause sagt es zuerst «Wo waren wir?» (Entscheid 19.11.2026) | `BUTTON_PINS` |
 | Hörer-Mikrofon | Eingang, den `sounddevice` unter einem eindeutigen Namen findet | `AUDIO_DEVICE_NAME` (Teil des Namens) |
 | Hörer-Kapsel | eigener ALSA-Ausgang, nur Gespräch | `HANDSET_ALSA_DEVICE` |
 | Raumlautsprecher | eigener ALSA-Ausgang, nur Klingeln, Help-Bestätigung, «Bitte Hörer abheben» | `SPEAKER_ALSA_DEVICE` |
@@ -33,15 +33,17 @@ Alle Taster und die Gabel schalten nach **GND**. Nie 5 V an einen GPIO-Pin legen
 | Rat | GPIO19 | 35 | 34 |
 | Familie | GPIO26 | 37 | 39 |
 | Hilfe | GPIO21 | 40 | 39 |
-| PAM8403 Versorgung | 5 V | 2 oder 4 | 6 |
+| Touch Display 2 Versorgung | 5 V | 2 | 6 |
+| PAM8403 Versorgung | 5 V | 4 | 14 |
 
 ```
-            3V3  (1) (2)  5V   ── PAM8403 +5V
-                 (3) (4)  5V
-                 (5) (6)  GND  ── PAM8403 GND
+            3V3  (1) (2)  5V   ── Touch Display 2 rot (5 V)
+                 (3) (4)  5V   ── PAM8403 +5V
+                 (5) (6)  GND  ── Touch Display 2 schwarz (GND)
                  (7) (8)
             GND  (9) (10)
 Gabel ── GPIO17 (11) (12)
+                (13) (14) GND  ── PAM8403 GND
                  ...
                 (27) (28)      (ID-EEPROM des HAT, frei lassen)
 Sprechen GPIO5  (29) (30) GND  ── Sprechen, Heute
@@ -96,7 +98,7 @@ Lautsprecher   ◄── PAM8403 Nr. 2 ◄── USB-Adapter B (Kopfhörer-Out) 
    python appointments_cli.py add "Testtermin" "JJJJ-MM-TT HH:MM" --by Test --pre 0
    ```
 7. **RTC-Batterie** (wenn geliefert): in `/boot/firmware/config.txt` `dtparam=rtc_bbat_vchg=3000000` ergänzen, damit die offizielle wiederaufladbare Batterie geladen wird. Ohne diese Zeile wird sie nicht geladen.
-8. **SSD ins USB-Gehäuse** (wenn AI HAT+ 2 kommt): Die SSD ist eine **Crucial P310, Grösse 2230** (nicht 2280). Das Gehäuse muss NVMe und 2230 aufnehmen. Der Pi 5 bootet ab Werk auch von USB (`rpi-eeprom-config` zeigt `BOOT_ORDER`, darin muss eine `4` stehen).
+8. **SSD ins USB-Gehäuse** (wenn AI HAT+ 2 kommt): Die SSD ist eine **Kingston NV3 1 TB, Grösse 2230** (nicht 2280; geliefert 17.11.2026). Die Crucial P310 war die SSD der FS26-Gruppe. Das Gehäuse muss NVMe und 2230 aufnehmen. Der Pi 5 bootet ab Werk auch von USB (`rpi-eeprom-config` zeigt `BOOT_ORDER`, darin muss eine `4` stehen).
 
 ## 4. Erster Start, Schritt für Schritt
 

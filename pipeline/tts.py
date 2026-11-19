@@ -4,12 +4,37 @@ import os
 import subprocess
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 from config import PIPER_VOICE, OUTPUT_DIR, HANDSET_ALSA_DEVICE, SPEAKER_ALSA_DEVICE
 from logging_config import get_logger, get_content_logger
 
 log = get_logger("tts")
 content_log = get_content_logger("tts")
+
+# Button "Sprechen" (decided 19.11.2026): the device stops talking at once and
+# listens. interrupt() stops the running playback and mutes further sentences
+# of the same answer until the dialog calls resume() before listening again.
+_interrupted = threading.Event()
+_lock = threading.Lock()
+_current: subprocess.Popen | None = None     # playback on the handset
+
+
+def interrupt() -> None:
+    """Stop the sentence being played now and the rest of this answer."""
+    _interrupted.set()
+    with _lock:
+        proc = _current
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
+
+
+def resume() -> None:
+    _interrupted.clear()
+
+
+def interrupted() -> bool:
+    return _interrupted.is_set()
 
 
 def synthesize(text: str) -> Path:
@@ -76,13 +101,34 @@ def player_command(wav_path: Path, output: str = "handset") -> list[str] | None:
 
 
 def play(wav_path: Path, output: str = "handset") -> None:
-    """Play a WAV file on the handset (default) or the room speaker."""
+    """Play a WAV file on the handset (default) or the room speaker.
+
+    Stops early when interrupt() is called (button "Sprechen")."""
+    global _current
     cmd = player_command(wav_path, output)
     if cmd is None:
         log.warning("No audio player found. WAV saved at: %s", wav_path)
         return
+    handset = output == "handset"
+    if handset and _interrupted.is_set():
+        return
     log.debug("Playing on %s...", output)
-    subprocess.run(cmd, timeout=30, check=True)
+    proc = subprocess.Popen(cmd)
+    if handset:
+        with _lock:
+            _current = proc
+    try:
+        code = proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        raise
+    finally:
+        if handset:
+            with _lock:
+                _current = None
+    if code != 0 and not (handset and _interrupted.is_set()):
+        raise subprocess.CalledProcessError(code, cmd)
     log.debug("Playback done")
 
 
@@ -93,6 +139,8 @@ def speak(text: str, output: str = "handset") -> None:
     page instead (sim_text.py).
     """
     import sim_text
+    if _interrupted.is_set() and output == "handset":
+        return                        # "Sprechen" pressed: rest of the answer unsaid
     sim_text.show(text, output)       # as text for the screen (RAM only)
     if sim_text.enabled():
         return

@@ -69,9 +69,19 @@ if [ -n "$DBFILE" ] && [ -f "$DBFILE" ]; then
   [ "${GRANTS:-0}" -gt 0 ] && ok "Freigaben am Gerät: $GRANTS Zeile(n) (python pipeline/device_api_cli.py list)" || warn "keine Freigaben am Gerät (device_api_cli.py grant ...)"
 fi
 
+if [ "$(uname)" = "Linux" ] && grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
+  echo "Hardware (Pi)"
+  HW="$("$PY" scripts/hardware_erkennen.py 2>/dev/null)"
+  echo "$HW"
+  WARN=$((WARN + $(printf '%s\n' "$HW" | grep -c '^  WARNUNG' || true)))
+  FAIL=$((FAIL + $(printf '%s\n' "$HW" | grep -c '^  FEHLT' || true)))
+fi
+
 echo "Dienste"
 if command -v systemctl >/dev/null && [ "$(uname)" = "Linux" ]; then
-  for s in ollama seniorvoice seniorvoice-api wg-quick@wg0; do
+  SERVICES="ollama seniorvoice seniorvoice-api wg-quick@wg0"
+  systemctl is-enabled seniorvoice-screen >/dev/null 2>&1 && SERVICES="$SERVICES seniorvoice-screen"
+  for s in $SERVICES; do
     st="$(systemctl is-active "$s" 2>/dev/null)"
     [ "$st" = "active" ] && ok "$s läuft" || warn "$s: ${st:-unbekannt}"
   done
