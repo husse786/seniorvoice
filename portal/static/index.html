@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SeniorVoice Portal</title>
+<link rel="stylesheet" href="app.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<a class="sr" href="#app">Zum Inhalt springen</a>
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">SeniorVoice <span>Portal</span></div>
+    <div class="spacer"></div>
+    <span class="who-top" id="who" hidden></span>
+    <button type="button" class="btn secondary" id="logout" hidden>Abmelden</button>
+  </div>
+</header>
+<div class="tunnel" role="note">
+  <div class="wrap">
+    <span aria-hidden="true">🔒</span>
+    <strong>Nur über die gesicherte Verbindung (Tunnel).</strong>
+    <span>Das Portal speichert nur Konten, Rollen, Zuordnungen und Anmeldungen. Inhalte kommen beim Öffnen live vom Gerät und werden hier nicht gespeichert.</span>
+  </div>
+</div>
+
+<main class="wrap" id="app">
+  <section class="card login" id="login-view" hidden>
+    <h2>Anmelden</h2>
+    <form id="login-form" autocomplete="on">
+      <div class="field"><label for="l-login">Benutzername</label>
+        <input type="text" id="l-login" name="username" autocomplete="username" required></div>
+      <div class="field"><label for="l-pass">Passwort</label>
+        <input type="password" id="l-pass" name="password" autocomplete="current-password" required></div>
+      <div class="field"><label for="l-code">Code aus der Authenticator-App <span class="hint">(6 Ziffern)</span></label>
+        <input type="text" id="l-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></div>
+      <p class="err" id="login-err" role="alert"></p>
+      <button class="btn" type="submit">Anmelden</button>
+    </form>
+  </section>
+
+  <section id="main-view" hidden>
+    <div id="devices-area">
+      <div class="sec-title"><h2 id="devices-title">Geräte</h2>
+        <button type="button" class="btn secondary sm" id="reload-devices">Aktualisieren</button></div>
+      <div class="people" id="devices" aria-live="polite"></div>
+    </div>
+
+    <div id="device-view" hidden>
+      <div class="senior-head"><h2 id="dv-name"></h2><span id="dv-state"></span></div>
+      <p class="live" id="dv-live"></p>
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <div id="panel" role="tabpanel"></div>
+    </div>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

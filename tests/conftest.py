@@ -15,7 +15,7 @@ PIPELINE_MODULES = [
     "interaction_log", "privacy_migration", "main", "tts", "sounds",
     "audio_capture", "stt", "sensor", "bus", "hardware", "core_service",
     "dialog_service", "appointments", "callback", "help_alert", "channels", "family",
-    "device_api", "advice",
+    "device_api", "advice", "metrics", "sim_phone", "sim_text", "health",
 ]
 
 # Environment variables that must not leak from the developer's shell
@@ -25,7 +25,9 @@ _ENV_TO_CLEAR = [
     "MEMORY_EXTRACTION_ENABLED", "OUTPUT_DIR", "MEMORY_DB_PATH", "LOG_DIR", "DB_PATH",
     "LLM_OLLAMA_API_BASE", "LLM_OLLAMA_MODEL", "LLM_KIMI_API_BASE", "LLM_KIMI_MODEL",
     "LLM_KIMI_API_KEY", "DEVICE_API_HOST", "DEVICE_API_PORT", "DEVICE_API_TOKEN_SHA256",
-    "AUDIT_RETENTION_DAYS",
+    "AUDIT_RETENTION_DAYS", "METRICS_DB_PATH", "SIM_AUDIO", "SIM_PHONE_PORT",
+    "SIM_PHONE_HOST", "SENIORVOICE_INPUT", "CHANNEL", "MAIL_SMTP_HOST", "MAIL_IMAP_HOST",
+    "MAIL_USER", "MAIL_PASSWORD", "MAIL_FROM", "MAIL_SMTP_PORT", "MAIL_IMAP_PORT",
 ]
 
 
@@ -44,6 +46,7 @@ class PipelineEnv:
         self.tmp = tmp_path
         self.monkeypatch = monkeypatch
         self.db_path = tmp_path / "data" / "seniorvoice.db"
+        self.metrics_path = tmp_path / "data" / "metrics.db"
         self.log_dir = tmp_path / "logs"
         self.output_dir = tmp_path / "out"
 

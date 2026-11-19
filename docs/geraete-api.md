@@ -62,6 +62,7 @@ Jede Anfrage braucht `Authorization: Bearer <Gerätetoken>` (das Portal) und `X-
 | `PUT /v1/advice/<id>` | nur wer eingetragen hat | `{"topic"?, "text"?}` |
 | `DELETE /v1/advice/<id>` | nur wer eingetragen hat | löscht sofort |
 | `GET /v1/audit` | alle | eigene Protokolleinträge; Admin: alle |
+| `GET /v1/health` | nur Admin | Gerätezustand für die Ansicht «Technik»: `device` (Temperatur, Last, Speicher, freier Platz, Laufzeit, Softwarestand), `services` (Kern läuft, Gesprächsprozess `bereit`/`laedt`/`neustart`/`aus`, Neustarts), `ai` (Modell, auf dem Gerät, erreichbar, installiert, Cloud-Sperre), `daily` (letzte 7 Tage: Anzahl Runden, Fehler je Code, Median und 95 % der Zeiten). Keine Inhalte, keine einzelnen Gesprächszeiten und kein Hinweis, ob gerade telefoniert wird |
 
 Fehler: `401` falscher Token, `403` keine Freigabe oder keine Berechtigung, `404` unbekannt, `400` ungültige Eingabe (auch: Zeit in der Vergangenheit, mehr als 2 Jahre voraus oder wegen Zeitumstellung nicht existent). Nach einem Fehler schliesst das Gerät die Verbindung.
 

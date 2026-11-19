@@ -92,9 +92,9 @@ def test_turn_leaves_no_text_in_files(env, monkeypatch):
     assert env.files_containing("Testsatz4711") == []
     assert env.files_containing("Antwortsatz0815") == []
 
-    # Metrics are still recorded for Grafana
+    # Metrics are still recorded for Grafana, in their own file
     import sqlite3
-    conn = sqlite3.connect(env.db_path)
+    conn = sqlite3.connect(env.metrics_path)
     rows = conn.execute(
         "SELECT trigger_type, user_text, response_text, llm_duration_ms FROM interactions"
     ).fetchall()

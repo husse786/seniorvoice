@@ -96,6 +96,9 @@ def play_sound(name: str) -> None:
     """Play a named feedback sound. No-op if sounds are disabled."""
     if not SOUND_ENABLED:
         return
+    import sim_text
+    if sim_text.enabled():
+        return          # text mode: no audio at all
 
     from tts import play
     try:

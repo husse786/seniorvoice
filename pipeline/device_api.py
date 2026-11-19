@@ -34,6 +34,7 @@ Requests: header "Authorization: Bearer <device token>" (the portal) and
     PUT    /v1/advice/<id>             only who entered it: {"topic", "text"}
     DELETE /v1/advice/<id>             only who entered it
     GET    /v1/audit                   own entries; admin: all
+    GET    /v1/health                  admin: device, services, AI, daily values (no content)
 """
 
 import hashlib
@@ -348,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
         if match is None:
             match = _ADVICE_ID.match(path)
             route = "/v1/advice/{id}" if match else path
-        known = route in ("/v1/status", "/v1/audit", "/v1/appointments",
+        known = route in ("/v1/status", "/v1/audit", "/v1/health", "/v1/appointments",
                           "/v1/appointments/{id}", "/v1/help",
                           "/v1/advice", "/v1/advice/{id}")
         action = f"{method} {route if known else '(unknown)'}"
@@ -387,6 +388,11 @@ class Handler(BaseHTTPRequestHandler):
         if (method, route) == ("GET", "/v1/status"):
             return 200, {"api": API_VERSION, "device_time": _iso(_now()),
                          "uptime_s": int(time.monotonic() - self.started)}
+        if (method, route) == ("GET", "/v1/health"):
+            if role != "admin":
+                raise ApiError(403, "technical view for admin only")
+            import health
+            return 200, health.collect()
         if (method, route) == ("GET", "/v1/audit"):
             return 200, {"entries": list_audit(None if role == "admin" else person["person_id"])}
         known = {("GET", "/v1/appointments"), ("POST", "/v1/appointments"),

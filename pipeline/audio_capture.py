@@ -17,8 +17,14 @@ from logging_config import get_logger
 log = get_logger("audio")
 
 
-def find_input_device() -> int:
-    """Find the audio input device index by name substring match."""
+def find_input_device() -> int | None:
+    """Find the audio input device index by name substring match.
+
+    Empty AUDIO_DEVICE_NAME: the system's default microphone (e.g. on a Mac
+    for the simulated device).
+    """
+    if not AUDIO_DEVICE_NAME.strip():
+        return None
     devices = sd.query_devices()
     for i, dev in enumerate(devices):
         if AUDIO_DEVICE_NAME.lower() in dev["name"].lower() and dev["max_input_channels"] > 0:
@@ -32,7 +38,7 @@ def find_input_device() -> int:
 def record_until_silence() -> bytes:
     """Record audio until silence is detected. Returns WAV bytes."""
     device_idx = find_input_device()
-    log.debug("Recording from device %d (%s)", device_idx, sd.query_devices(device_idx)["name"])
+    log.debug("Recording from device %s", "default" if device_idx is None else device_idx)
 
     frames = []
     silent_chunks = 0

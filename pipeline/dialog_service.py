@@ -49,6 +49,11 @@ class DialogService:
         kind = msg.get("type")
         if kind == "ping":
             self.bus.send("pong")
+        elif kind == "sim_text":
+            # Text mode of the simulation: a typed sentence (RAM only)
+            import sim_text
+            if isinstance(msg.get("text"), str):
+                sim_text.put_input(msg["text"])
         elif kind == "call_start":
             self.call_id += 1
             self.call_active.set()
@@ -66,6 +71,17 @@ class DialogService:
 
     def state(self, state: str) -> None:
         self.bus.send("state", state=state)
+
+    def hear(self) -> str:
+        """One spoken answer of the senior (typed on the phone page in the
+        text mode of the simulation)."""
+        import sim_text
+        if sim_text.enabled():
+            from config import MAX_RECORD_SECONDS
+            return sim_text.wait_input(self.active, timeout=MAX_RECORD_SECONDS)
+        import audio_capture
+        import stt
+        return stt.transcribe(audio_capture.record_until_silence())
 
     # --- conversation ---
 
@@ -100,8 +116,6 @@ class DialogService:
     def offer_callback(self) -> None:
         """A7: at most once a day, only a clear yes counts."""
         from datetime import datetime, timezone
-        from audio_capture import record_until_silence
-        from stt import transcribe
         from tts import speak
 
         now = datetime.now(timezone.utc)
@@ -111,7 +125,7 @@ class DialogService:
         self.state("speaking")
         speak(callback.offer_question(now))
         self.state("listening")
-        answer = transcribe(record_until_silence()) if self.active() else ""
+        answer = self.hear() if self.active() else ""
         if not self.active():
             self.state("idle")          # hung up: no consent, nothing scheduled
             return
@@ -125,8 +139,6 @@ class DialogService:
     def family_message(self) -> None:
         """A4/M7: record, read back, send only after a clear yes."""
         import family
-        from audio_capture import record_until_silence
-        from stt import transcribe
         from tts import speak
         from sounds import play_sound
 
@@ -139,7 +151,7 @@ class DialogService:
         speak(family.ASK)
         play_sound("listen")
         self.state("listening")
-        text = transcribe(record_until_silence()).strip()
+        text = self.hear().strip()
         if not self.active():
             self.state("idle")
             return
@@ -151,7 +163,7 @@ class DialogService:
             return
         speak(family.READ_BACK.format(text=text, name=contact["name"]))
         self.state("listening")
-        answer = transcribe(record_until_silence())
+        answer = self.hear()
         if not self.active():
             self.state("idle")          # hung up: send nothing, say nothing
             return
@@ -179,8 +191,6 @@ class DialogService:
         The question is neither stored nor logged and does not go into the
         conversation history, so it never reaches the notes either.
         """
-        from audio_capture import record_until_silence
-        from stt import transcribe
         from tts import speak
         from sounds import play_sound
 
@@ -188,7 +198,7 @@ class DialogService:
         speak(advice.ASK)
         play_sound("listen")
         self.state("listening")
-        question = transcribe(record_until_silence()).strip()
+        question = self.hear().strip()
         if not self.active():
             self.state("idle")
             return
@@ -223,6 +233,8 @@ class DialogService:
 
         my_call = self.call_id
         self.hint_given = False
+        import sim_text
+        sim_text.clear_input()        # nothing typed before lifting counts
 
         def active() -> bool:
             return self.running and self.call_active.is_set() and self.call_id == my_call
@@ -281,17 +293,22 @@ class DialogService:
             extract_facts_async(history, source=f"call-{int(time.time())}")
 
     def run(self) -> None:
-        from stt import get_model
         from llm_backend import complete
         from config import MEMORY_PURGE_INTERVAL
         from memory import PurgeService
 
+        import sim_text
+        if sim_text.enabled():
+            # Sentences go to the phone page via the core (never to a file)
+            sim_text.set_sink(lambda text, output: self.bus.send("sim_say", text=text, output=output))
         self.bus.listen(self.on_message, name="core-bus")
         # Histories whose note extraction failed wait in this process's RAM;
         # expire them here too (the core's purge cannot reach this process).
         PurgeService(interval=MEMORY_PURGE_INTERVAL).start()
         self.state("loading")
-        get_model()
+        if not sim_text.enabled():
+            from stt import get_model     # text mode needs no speech recognition
+            get_model()
         try:
             complete([{"role": "user", "content": "Hallo"}], timeout_override=60)
         except Exception as e:
