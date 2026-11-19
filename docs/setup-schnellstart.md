@@ -23,7 +23,7 @@ Ziel: In etwa einer Stunde läuft SeniorVoice auf dem Pi. Du hebst per Tastatur 
 | Teil | Hinweis |
 |---|---|
 | **microSD-Karte** (16–32 GB) und Kartenleser am Laptop | für das Betriebssystem, bis die SSD eingebaut ist |
-| **Irgendein Tonausgang zum Testen**: USB-Headset, USB-Lautsprecher, oder ein Bildschirm mit eingebauten Lautsprechern plus Micro-HDMI-Kabel | Der Pi 5 hat **keine** Kopfhörerbuchse. Ein Bluetooth-Gerät geht im Lite-System nicht einfach. Der Pebble-Lautsprecher ist noch nicht da. |
+| **Irgendein Tonausgang zum Testen**: USB-Headset, USB-Lautsprecher, oder ein Bildschirm mit eingebauten Lautsprechern plus Micro-HDMI-Kabel | Der Pi 5 hat **keine** Kopfhörerbuchse. Ein Bluetooth-Gerät geht im Lite-System nicht einfach. Der eingebaute Raumlautsprecher kommt später (Erweiterung B). |
 | Laptop im selben WLAN wie der Pi | für SSH |
 
 ### Warum ein Zwischenaufbau?
@@ -252,9 +252,9 @@ Danach `sudo shutdown now`, **Strom ziehen, microSD herausnehmen**, Strom wieder
 
 Hinweis: `rpi-clone` ist ein verbreitetes Hilfsprogramm, nicht von Raspberry Pi selbst. Klappt der Umzug nicht, einfach mit der microSD weiterarbeiten.
 
-### B. Lautsprecher
+### B. Raumlautsprecher
 
-Gekauft wird ein **kabelgebundener** Lautsprecher (FS26: Bluetooth verschluckt kurze Töne). Ist es ein USB-Lautsprecher wie der Creative Pebble V3: per USB-Kabel anschliessen, nicht per Bluetooth; Kartenname wie in 5.1 suchen und in `.env` eintragen. Laut Hersteller braucht der Pebble für «High Gain» 10 W; am Pi den Gain-Schalter auf **Low** lassen (die USB-Buchsen des Pi liefern zusammen höchstens 1,6 A).
+Entscheid 17.11.2026: Der Raumlautsprecher wird **ins Gehäuse eingebaut**, kabelgebunden (FS26: Bluetooth verschluckt kurze Töne). Aufbau: zweiter USB-Audio-Adapter → Verstärker PAM8403 → Lautsprecher 3 W, 4–8 Ω. Anschluss, Benennung der beiden Adapter (`handset`/`speaker`) und Prüfbefehle stehen in [inbetriebnahme-telefon.md](inbetriebnahme-telefon.md), Kapitel 2 «Audio» und 4.3–4.4. Bis dahin bleibt der Ersatz-Tonausgang aus Schritt 5.
 
 ### C. Hörer, Gabel und Knöpfe (Telefon-Hardware)
 
