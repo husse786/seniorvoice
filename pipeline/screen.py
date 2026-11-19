@@ -120,15 +120,20 @@ class Screen:
 
     def state(self) -> dict:
         phone = self.phone_state()
-        help_status = self.help_status() if phone.get("help_open") else None
+        help_status = (self.help_status()
+                       if phone.get("help_open") or phone.get("help_phase") == "abgebrochen"
+                       else None)
         ringing = bool(phone.get("ringing"))
         in_call = bool(phone.get("in_call"))
-        if help_status is not None or phone.get("help_open"):
+        cancelled = phone.get("help_phase") == "abgebrochen" and not phone.get("help_open")
+        if phone.get("help_open") or (help_status is not None and not cancelled):
             mode = "hilfe"
         elif ringing:
             mode = "klingelt"
         elif in_call:
             mode = "gespraech"
+        elif cancelled and help_status is not None:
+            mode = "hilfe"          # "Abgebrochen" only while nothing else is shown
         else:
             mode = "ruhe"
         reminder = ""
@@ -262,8 +267,8 @@ font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
   <div class="foot">Beim Auflegen ist alles weg.</div>
 </div>
 <div class="view helpv" id="hilfe" hidden>
-  <div class="top"><div class="clock" data-clock></div><span class="pill">Hilfe unterwegs</span></div>
-  <div class="big">Ihre Meldung ist unterwegs.</div>
+  <div class="top"><div class="clock" data-clock></div><span class="pill" id="helppill">Hilfe unterwegs</span></div>
+  <div class="big" id="helpbig">Ihre Meldung ist unterwegs.</div>
   <div class="say" id="helptext"></div>
   <div class="foot">Bei Lebensgefahr: 144 anrufen.</div>
 </div>
@@ -288,7 +293,11 @@ function render(s){
  s.gespraech.slice(-2).forEach(l=>{const d=el("div","say"+(l.who==="senior"?" me":""));
   d.append(el("span","who",l.who==="senior"?"Sie":"SeniorVoice"),document.createTextNode(l.text));conv.append(d);});
  const h=s.hilfe||{};const ht=$("helptext");ht.replaceChildren();
- if(h.kontakt){ht.append(el("span",h.zugestellt?"ok":null,(h.zugestellt?"✓ ":"")+h.kontakt+(h.rolle?" ("+h.rolle+")":"")+(h.zugestellt?" ist benachrichtigt.":" wird benachrichtigt …")));
+ $("helppill").textContent=h.phase==="abgebrochen"?"Hilfe abgebrochen":(h.phase==="wartet"?"Hilfe"+(h.rest?" · noch "+h.rest+" s":""):"Hilfe unterwegs");
+ $("helpbig").textContent=h.phase==="abgebrochen"?"Abgebrochen.":(h.phase==="wartet"?"Gleich wird "+(h.kontakt||"Ihre Kontaktperson")+" informiert.":"Ihre Meldung ist unterwegs.");
+ if(h.phase==="abgebrochen")ht.textContent="Es wird niemand informiert. Brauchen Sie doch Hilfe? Nochmals «Hilfe» drücken.";
+ else if(h.phase==="wartet")ht.textContent="Aus Versehen gedrückt? Nochmals «Hilfe» drücken.";
+ else if(h.kontakt){ht.append(el("span",h.zugestellt?"ok":null,(h.zugestellt?"✓ ":"")+h.kontakt+(h.rolle?" ("+h.rolle+")":"")+(h.zugestellt?" ist benachrichtigt.":" wird benachrichtigt …")));
   ht.append(el("br"),document.createTextNode("Wir warten auf eine Antwort."));}
  else ht.textContent="Die Meldung wird verschickt …";}
 async function refresh(){try{const r=await fetch("/screen/state",{cache:"no-store"});if(!r.ok)throw 0;

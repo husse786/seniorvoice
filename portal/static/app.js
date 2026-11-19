@@ -6,7 +6,8 @@ const $ = (id) => document.getElementById(id);
 const ROLE_LABEL = { angehoerige: "Angehörige", spitex: "Spitex", admin: "Admin (nur Technik)" };
 const KIND_LABEL = { termin: "Termin", medikament: "Medikament" };
 const STATUS_LABEL = { geplant: "geplant", klingelt: "klingelt", bestaetigt: "bestätigt",
-  verpasst: "verpasst", offen: "offen", quittiert: "erledigt", "niemand erreicht": "niemand erreicht" };
+  verpasst: "verpasst", offen: "offen", quittiert: "erledigt", "niemand erreicht": "niemand erreicht",
+  abgebrochen: "abgebrochen" };
 const REFRESH_MS = 15000;
 
 let me = null;
@@ -284,12 +285,13 @@ async function renderHilfe(refresh) {
   if (!data) return;
   const rows = data.alerts.map((a) => el("tr", {},
     el("td", {}, fmtIso(a.created_at)), el("td", {}, chip(a.status)),
-    el("td", {}, a.delivered ? "zugestellt" : "nicht zugestellt"),
+    el("td", {}, a.delivered ? "zugestellt" : (a.status === "abgebrochen" ? "nicht verschickt" : "nicht zugestellt")),
     el("td", {}, a.acknowledged_by || "–")));
   $("panel").replaceChildren(el("div", { class: "card" }, el("h3", {}, "Hilfe-Verlauf"),
     data.alerts.length ? el("div", { class: "tbl-wrap" }, el("table", {},
       el("thead", {}, el("tr", {}, el("th", {}, "Wann"), el("th", {}, "Status"), el("th", {}, "Meldung"), el("th", {}, "Gekümmert hat sich"))),
       el("tbody", {}, rows))) : el("p", { class: "empty" }, "Keine Hilfe-Meldungen."),
+    el("p", { class: "small muted" }, "«abgebrochen»: Am Gerät wurde kurz nach dem ersten Druck nochmals «Hilfe» gedrückt. Die Meldung wurde nicht verschickt."),
     el("p", { class: "privacy" }, "Der Hilfe-Knopf meldet sich direkt bei der Kontaktperson. Das Portal ist kein Notruf und zeigt nur den Verlauf.")));
 }
 

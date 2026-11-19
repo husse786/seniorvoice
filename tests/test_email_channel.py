@@ -160,6 +160,9 @@ def test_help_service_closes_alert_on_email_reply(mail, env):
                                    now=lambda: wall["t"], monotonic=lambda: clock["t"])
     service.trigger()
     service.step()
+    assert server.sent == []                      # waits: a second press may cancel
+    clock["t"] += help_mod.CANCEL_SECONDS
+    service.step()
     assert len(server.sent) == 1
     server.reply("SANDRA@example.ch", "Re: " + server.sent[0]["Subject"])
     clock["t"] += 20

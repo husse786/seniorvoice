@@ -56,7 +56,7 @@ Jede Anfrage braucht `Authorization: Bearer <Gerätetoken>` (das Portal) und `X-
 | `POST /v1/appointments` | Angehörige, Spitex | `{"title", "due_local", "kind": "termin"\|"medikament", "pre_minutes"}` → `201 {"id"}` |
 | `PUT /v1/appointments/<id>` | nur wer eingetragen hat | `{"title"?, "due_local"?, "pre_minutes"?}`. Nur Text geändert: Erinnerungen behalten ihren Status. Neue Zeit: Erinnerungen werden neu geplant, die gewählte Vorerinnerung bleibt |
 | `DELETE /v1/appointments/<id>` | nur wer eingetragen hat | löscht sofort (secure_delete) |
-| `GET /v1/help` | Angehörige, Spitex mit `--help-visible` | Help-Verlauf: Zeit, Status, zugestellt, quittiert von |
+| `GET /v1/help` | Angehörige, Spitex mit `--help-visible` | Help-Verlauf: Zeit, Status (`offen`, `quittiert`, `niemand erreicht`, `abgebrochen`), zugestellt, quittiert von |
 | `GET /v1/advice` | Angehörige, Spitex | Infos für den Rat-Knopf (B2): `topic`, `text`, `created_by`, `own` |
 | `POST /v1/advice` | Angehörige, Spitex | `{"topic" (≤ 80 Zeichen), "text" (≤ 600)}` → `201 {"id"}`; höchstens 40 Einträge. Der Text wird am Gerät wörtlich vorgelesen, mit «hat <Name> hinterlegt» |
 | `PUT /v1/advice/<id>` | nur wer eingetragen hat | `{"topic"?, "text"?}` |
