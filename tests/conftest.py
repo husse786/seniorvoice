@@ -15,7 +15,7 @@ PIPELINE_MODULES = [
     "interaction_log", "privacy_migration", "main", "tts", "sounds",
     "audio_capture", "stt", "sensor", "bus", "hardware", "core_service",
     "dialog_service", "appointments", "callback", "help_alert", "channels", "family",
-    "device_api", "advice", "metrics", "sim_phone", "sim_text", "health",
+    "device_api", "advice", "metrics", "sim_phone", "sim_text", "health", "greeting",
 ]
 
 # Environment variables that must not leak from the developer's shell
@@ -28,6 +28,7 @@ _ENV_TO_CLEAR = [
     "AUDIT_RETENTION_DAYS", "METRICS_DB_PATH", "SIM_AUDIO", "SIM_PHONE_PORT",
     "SIM_PHONE_HOST", "SENIORVOICE_INPUT", "CHANNEL", "MAIL_SMTP_HOST", "MAIL_IMAP_HOST",
     "MAIL_USER", "MAIL_PASSWORD", "MAIL_FROM", "MAIL_SMTP_PORT", "MAIL_IMAP_PORT",
+    "PROMPTS_DIR", "GREETING_ON_PICKUP", "SENIOR_NAME",
 ]
 
 
@@ -86,6 +87,8 @@ def env(tmp_path, monkeypatch):
         LOG_DIR=e.log_dir,
         OUTPUT_DIR=e.output_dir,
         SOUND_ENABLED="false",
+        # Dialog tests script the turns; the opening is tested in test_greeting.py
+        GREETING_ON_PICKUP="false",
     )
     yield e
     _reset_logging()

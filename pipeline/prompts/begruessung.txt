@@ -1,0 +1,71 @@
+# Begrüssung beim Abheben. Das Gerät setzt sie aus drei Teilen zusammen:
+#   1. Gruss nach Tageszeit          Abschnitte [morgen] [mittag] [nachmittag] [abend] [nacht]
+#   2. nächster Termin heute         Abschnitt [termin]  (nur wenn heute noch einer kommt)
+#   3. eine kleine, konkrete Frage   Abschnitt [frage] plus [frage_morgen], [frage_mittag] usw.
+#
+# Eine Variante pro Zeile. Das Gerät nimmt jedes Mal zufällig eine, nicht zweimal hintereinander dieselbe.
+# Platzhalter:
+#   {anrede}  ", Frau Keller" (aus SENIOR_NAME in .env), leer wenn kein Name gesetzt ist
+#   {name}    "Frau Keller" ohne Komma; Zeilen mit {name} werden übersprungen, wenn kein Name gesetzt ist
+#   {zeit}    z. B. "15:30 Uhr" oder "15 Uhr"   (nur im Abschnitt [termin])
+#   {titel}   der Titel des Termins             (nur im Abschnitt [termin])
+# Tageszeiten: morgen 5–11 Uhr, mittag 11–14, nachmittag 14–18, abend 18–22, nacht 22–5.
+# Nie: «Wie kann ich Ihnen helfen?»
+# Änderungen gelten beim nächsten Abheben, ohne Neustart.
+
+[morgen]
+Guten Morgen{anrede}.
+Guten Morgen{anrede}. Schön, Sie zu hören.
+Einen schönen guten Morgen{anrede}.
+
+[mittag]
+Guten Tag{anrede}.
+Hallo{anrede}. Schön, dass Sie sich melden.
+Guten Tag{anrede}. Da sind Sie ja.
+
+[nachmittag]
+Guten Tag{anrede}.
+Schönen Nachmittag{anrede}.
+Hallo{anrede}. Schön, Sie zu hören.
+
+[abend]
+Guten Abend{anrede}.
+Einen schönen Abend{anrede}.
+Guten Abend{anrede}. Schön, dass Sie sich melden.
+
+[nacht]
+Guten Abend{anrede}. Es ist schon spät.
+Hallo{anrede}. Sie sind ja noch wach.
+
+[termin]
+Heute um {zeit} steht noch etwas an: {titel}.
+Nicht vergessen, heute um {zeit}: {titel}.
+Übrigens, heute um {zeit} haben Sie {titel}.
+
+[frage]
+Wie geht es Ihnen heute?
+Was haben Sie heute schon erlebt?
+Worüber möchten Sie heute plaudern?
+
+[frage_morgen]
+Haben Sie gut geschlafen?
+Haben Sie schon gefrühstückt?
+Was haben Sie sich für heute vorgenommen?
+
+[frage_mittag]
+Haben Sie schon zu Mittag gegessen?
+Was gibt es heute Feines zum Mittag?
+
+[frage_nachmittag]
+Waren Sie heute schon draussen?
+Wie war Ihr Morgen?
+Hatten Sie heute schon Besuch?
+
+[frage_abend]
+Wie war Ihr Tag?
+Was war heute das Schönste?
+Haben Sie schon zu Abend gegessen?
+
+[frage_nacht]
+Können Sie nicht schlafen?
+Was beschäftigt Sie gerade?

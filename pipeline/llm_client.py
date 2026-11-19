@@ -9,29 +9,44 @@ from llm_backend import complete as llm_complete, stream as llm_stream
 log = get_logger("llm")
 content_log = get_content_logger("llm")
 
-_BASE_SYSTEM_PROMPT = (
-    "Du bist SeniorAgent, ein freundlicher und geduldiger Sprachassistent "
-    "fuer aeltere Menschen (65+) in der Schweiz. Du sprichst Hochdeutsch, "
-    "klar und einfach. Halte deine Antworten kurz (2-3 Saetze), es sei denn "
-    "der Benutzer bittet um mehr Details. Sei warmherzig und hilfsbereit.\n"
-    "\n"
-    "Wichtige Regeln:\n"
-    "- Verwende NIEMALS Emojis oder Sonderzeichen. Deine Antworten werden vorgelesen.\n"
-    "- Sieze den Benutzer (verwende 'Sie', nicht 'du').\n"
-    "- Wenn der Benutzer Fragen ueber sich selbst stellt (z.B. 'Wie heisse ich?', "
-    "'Welchen Beruf habe ich?'), beantworte diese anhand der bekannten Informationen "
-    "ueber den Benutzer. Verwechsle NICHT den Benutzer mit dir selbst.\n"
-    "- Erfinde NIEMALS Informationen. Wenn du etwas nicht weisst, sage ehrlich: "
-    "'Das weiss ich leider nicht.' Antworte lieber kurz und ehrlich als falsch."
+# Used only if prompts/persona.txt is missing or empty
+_FALLBACK_SYSTEM_PROMPT = (
+    "Du bist SeniorVoice, ein freundlicher und geduldiger Gesprächspartner "
+    "für ältere Menschen (65+) in der Schweiz. Du sprichst Hochdeutsch, klar und "
+    "einfach, und antwortest kurz. Sieze die Person. Verwende nie Emojis. "
+    "Erfinde nie Informationen. Frage nie 'Wie kann ich Ihnen helfen?'."
 )
+_persona_cache: tuple[str, float, str] | None = None
 
+
+def base_system_prompt() -> str:
+    """Persona from prompts/persona.txt (editable without code; # = comment).
+    Re-read when the file changes, so edits apply from the next sentence."""
+    global _persona_cache
+    from config import PROMPTS_DIR
+    path = PROMPTS_DIR / "persona.txt"
+    try:
+        mtime = path.stat().st_mtime
+        if _persona_cache is None or _persona_cache[:2] != (str(path), mtime):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            text = "\n".join(l for l in lines if not l.lstrip().startswith("#")).strip()
+            _persona_cache = (str(path), mtime, text)
+        if _persona_cache[2]:
+            return _persona_cache[2]
+    except OSError as e:
+        log.warning("Persona file not readable (%s), using fallback", type(e).__name__)
+    return _FALLBACK_SYSTEM_PROMPT
+
+
+# Only when the device did not open the call itself (GREETING_ON_PICKUP=false)
 _GREETING_INSTRUCTION = (
-    "\nBegruesse den Benutzer herzlich — dies ist der Beginn einer neuen Sitzung."
+    "\nDies ist der Beginn des Gesprächs. Begrüsse die Person kurz und herzlich "
+    "und stelle eine kleine, konkrete Frage."
 )
 
 _NO_GREETING_INSTRUCTION = (
-    "\nDies ist eine laufende Sitzung. Begruesse den Benutzer NICHT erneut. "
-    "Antworte direkt auf die Frage."
+    "\nDas Gespräch läuft bereits. Begrüsse die Person NICHT erneut. "
+    "Knüpfe an das Gesagte an."
 )
 
 _SENTENCE_END = re.compile(r"[.!?]\s")
@@ -39,7 +54,7 @@ _SENTENCE_END = re.compile(r"[.!?]\s")
 
 def build_system_prompt(facts_block: str = "", is_first_turn: bool = True) -> str:
     """Build the system prompt, optionally including known user facts."""
-    parts = [_BASE_SYSTEM_PROMPT]
+    parts = [base_system_prompt()]
     parts.append(_GREETING_INSTRUCTION if is_first_turn else _NO_GREETING_INSTRUCTION)
     if facts_block:
         parts.append(f"\n{facts_block}")
