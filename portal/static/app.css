@@ -178,3 +178,6 @@ dl.facts{display:grid;grid-template-columns:auto 1fr;gap:.3rem 1rem;margin:0}
 dl.facts dt{color:var(--muted)}
 dl.facts dd{margin:0;font-weight:600}
 @media (max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.st-audit-ok{background:var(--ok-soft);color:var(--ok)}
+.st-audit-bad{background:var(--bad-soft);color:var(--bad)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.78rem}
