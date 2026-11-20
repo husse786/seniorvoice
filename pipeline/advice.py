@@ -7,6 +7,10 @@ enter information (topic + text), for example the Spitex phone number or
 verbatim, the same way as medication reminders. If nothing entered fits,
 it says "Fragen Sie Ihre Spitex oder Ihre Ärztin."
 
+When Rat is pressed, the device first names the entered topics (at most
+five, titles only, decision 19.11.2026), so the senior knows what can be
+asked without remembering it.
+
 T12 (team, 14.11.2026): if the question hints at an emergency (chest
 pain, breathlessness, a fall, unconsciousness ...), the device points to
 the Help button and 144 first. This is decided by a fixed word list and
@@ -38,6 +42,11 @@ from logging_config import get_logger
 log = get_logger("advice")
 
 ASK = "Was möchten Sie wissen? Bitte stellen Sie Ihre Frage."
+# Decision 19.11.2026 (Husey): on pressing Rat the device names the entered
+# topics first, so the senior knows what can be asked. Only the topic titles
+# as entered, never the texts and never words of the model.
+ASK_WITH_TOPICS = "Ich kann Ihnen etwas sagen zu: {topics}. Was möchten Sie wissen?"
+MAX_SPOKEN_TOPICS = 5   # more would be too long to listen to on the handset
 NOTHING_HEARD = "Ich habe Sie leider nicht verstanden. Drücken Sie Rat nochmals, wenn Sie etwas fragen möchten."
 NO_ENTRY = "Dazu ist bei mir nichts hinterlegt. Fragen Sie Ihre Spitex oder Ihre Ärztin."
 ANSWER = "Zum Thema {topic} hat {by} hinterlegt: {text}"
@@ -304,6 +313,33 @@ def find_item(question: str, items: list[dict] | None = None, complete=None) -> 
     # Which entry was chosen would reveal what was asked: not logged
     log.info("Rat: %s", "entry read out" if item else "no entry fits")
     return item
+
+
+def _topic_list(topics: list[str]) -> str:
+    """'A', 'A und B', 'A, B und C' (German enumeration)."""
+    if len(topics) == 1:
+        return topics[0]
+    return ", ".join(topics[:-1]) + " und " + topics[-1]
+
+
+def ask_for(items: list[dict]) -> str:
+    """What the device says when Rat is pressed.
+
+    Names at most MAX_SPOKEN_TOPICS entered topics (oldest first, the order
+    the portal shows) and says how many more there are. No entries: the
+    plain question, so an emergency question still gets the hint.
+    """
+    topics = [item["topic"].strip().rstrip(".,;:!?").strip() for item in items]
+    topics = [t for t in topics if t]
+    if not topics:
+        return ASK
+    named = topics[:MAX_SPOKEN_TOPICS]
+    rest = len(topics) - len(named)
+    if rest == 1:
+        named.append("einem weiteren Thema")
+    elif rest > 1:
+        named.append(f"{rest} weiteren Themen")
+    return ASK_WITH_TOPICS.format(topics=_topic_list(named))
 
 
 def is_health_question(question: str) -> bool:
